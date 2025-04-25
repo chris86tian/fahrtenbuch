@@ -3,6 +3,7 @@ import { generateId } from './helpers';
 
 interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId'> {
   fahrzeugkennzeichen: string; // Keep this for parsing, but we'll ignore it later
+  originalEndOdometerValue?: string; // Store the original value for error reporting
 }
 
 export const parseCSV = (csvContent: string): ImportedTrip[] => {
@@ -15,6 +16,10 @@ export const parseCSV = (csvContent: string): ImportedTrip[] => {
   return dataRows.map(row => {
     const columns = row.split(',').map(col => col.trim().replace(/^"(.*)"$/, '$1'));
     
+    const startOdometer = parseInt(columns[6]);
+    const endOdometer = parseInt(columns[7]); // Attempt to parse end odometer
+    const originalEndOdometerValue = columns[7]; // Store original value
+
     // Map German headers to our data structure
     return {
       date: formatDateForImport(columns[0]),
@@ -23,8 +28,9 @@ export const parseCSV = (csvContent: string): ImportedTrip[] => {
       startLocation: columns[3],
       endLocation: columns[4],
       purpose: mapPurpose(columns[5]),
-      startOdometer: parseInt(columns[6]),
-      endOdometer: parseInt(columns[7]),
+      startOdometer: startOdometer,
+      endOdometer: endOdometer, // Store the parsed value (might be NaN)
+      originalEndOdometerValue: originalEndOdometerValue, // Store original for error message
       driverName: columns[9],
       fahrzeugkennzeichen: columns[10], // Parse the license plate, but we won't use it for validation
       notes: columns[12] || ''
@@ -65,11 +71,6 @@ export const validateImportedTrips = (
     const rowNumber = i + 2; // +2 because of 0-based index and header row
 
     // REMOVED: Vehicle existence check based on license plate
-    // const vehicle = vehicles.find(v => v.licensePlate === trip.fahrzeugkennzeichen);
-    // if (!vehicle) {
-    //   errors.push(`Zeile ${rowNumber}: Fahrzeug mit Kennzeichen "${trip.fahrzeugkennzeichen}" nicht gefunden`);
-    //   continue; // Skip further validation for this row if vehicle not found
-    // }
 
     // Validate date
     if (!isValidDate(trip.date)) {
@@ -82,9 +83,20 @@ export const validateImportedTrips = (
     }
 
     // Validate odometer readings
-    if (isNaN(trip.startOdometer) || isNaN(trip.endOdometer) || trip.endOdometer < trip.startOdometer) {
-      errors.push(`Zeile ${rowNumber}: Ungültige Kilometerstände (Start: ${trip.startOdometer}, Ende: ${trip.endOdometer})`);
+    const startOdometerIsNaN = isNaN(trip.startOdometer);
+    const endOdometerIsNaN = isNaN(trip.endOdometer);
+
+    if (startOdometerIsNaN) {
+       errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Start). Erwartet wurde eine Zahl.`);
     }
+    if (endOdometerIsNaN) {
+       // More specific error if endOdometer is NaN
+       errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Ende). Erwartet wurde eine Zahl, gefunden wurde "${trip.originalEndOdometerValue}". Bitte prüfen Sie die 8. Spalte Ihrer CSV-Datei.`);
+    } else if (!startOdometerIsNaN && trip.endOdometer < trip.startOdometer) {
+       // Check order only if both are valid numbers
+       errors.push(`Zeile ${rowNumber}: Kilometerstand Ende (${trip.endOdometer}) muss größer oder gleich Kilometerstand Start (${trip.startOdometer}) sein.`);
+    }
+
 
     // Validate required fields
     if (!trip.startLocation || !trip.endLocation || !trip.driverName) {
@@ -120,8 +132,8 @@ export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[])
   }
 
   return trips.map(trip => {
-    // Ignore the fahrzeugkennzeichen from the CSV
-    const { fahrzeugkennzeichen, ...tripData } = trip; 
+    // Ignore the fahrzeugkennzeichen and originalEndOdometerValue from the CSV
+    const { fahrzeugkennzeichen, originalEndOdometerValue, ...tripData } = trip; 
     return {
       ...tripData,
       id: generateId(),
