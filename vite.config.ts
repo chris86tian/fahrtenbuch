@@ -7,6 +7,7 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  base: './', // Wichtig für relative Pfade im Build
   server: {
     host: '0.0.0.0', // Listen on all addresses
     port: parseInt(process.env.PORT || '3000')

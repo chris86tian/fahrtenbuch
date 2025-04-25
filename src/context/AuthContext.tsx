@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,7 +22,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Prüfen, ob der Benutzer bereits angemeldet ist
     const checkSession = async () => {
       try {
+        console.log('Checking auth session...');
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('Session check complete', !!session);
         setIsAuthenticated(!!session);
         setUser(session?.user || null);
       } catch (error) {
@@ -35,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Auf Änderungen des Auth-Status hören
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed', !!session);
       setIsAuthenticated(!!session);
       setUser(session?.user || null);
     });
@@ -46,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -57,17 +62,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Supabase handles setting the session via onAuthStateChange listener
-      // We just need to return true on successful sign-in
       return !!data.user; 
-
     } catch (error) {
       console.error('Anmeldefehler:', error);
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = async () => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Abmeldefehler:', error.message);
@@ -75,16 +81,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // State updates are handled by onAuthStateChange
     } catch (error) {
       console.error('Abmeldefehler:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    // Zeige LoadingIndicator während der Sitzungsprüfung
-    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
-  }
-
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

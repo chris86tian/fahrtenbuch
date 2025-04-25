@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -8,11 +8,17 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Settings from './pages/Settings';
+import LoadingIndicator from './components/LoadingIndicator';
 import './index.css';
 
 // ProtectedRoute remains the same: Checks auth and redirects if needed
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
+  }
+  
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
@@ -31,17 +37,42 @@ const AppLayout: React.FC = () => {
 
 // Component to conditionally render Login or redirect to App
 const LoginRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
+  }
+  
   return isAuthenticated ? <Navigate to="/app" replace /> : <LoginPage />;
 };
 
 // Component to conditionally render Landing or redirect to App
 const LandingRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) {
+    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
+  }
+  
   return isAuthenticated ? <Navigate to="/app" replace /> : <LandingPage />;
 };
 
 function App() {
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Ensure the app is properly initialized
+  useEffect(() => {
+    // Simple initialization check
+    setIsInitialized(true);
+    
+    // Log to help with debugging
+    console.log('App initialized');
+  }, []);
+
+  if (!isInitialized) {
+    return <LoadingIndicator message="Anwendung wird initialisiert..." />;
+  }
+
   return (
     <Router>
       <AuthProvider>
