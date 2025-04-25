@@ -11,7 +11,8 @@
     "docker:build": "docker build -t fahrtenbuch .",
     "docker:run": "docker run -p 8080:80 fahrtenbuch",
     "docker:compose": "docker-compose up -d",
-    "docker:stop": "docker-compose down"
+    "docker:stop": "docker-compose down",
+    "start": "vite preview --port 8080"  // Added start script for Nixpacks
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
