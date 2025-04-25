@@ -1,8 +1,8 @@
 import { Trip, Vehicle } from '../types';
-import { generateId } from './helpers';
+import { generateId } from './helpers'; // generateId is no longer needed here, but keep import for now
 
 // Keep the original values to store the raw strings from the CSV
-interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'startOdometer' | 'endOdometer'> {
+interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'startOdometer' | 'endOdometer' | 'user_id'> {
   fahrzeugkennzeichen: string;
   originalStartOdometerValue: string | null; // Store the raw value from CSV column 6
   originalEndOdometerValue: string | null; // Store the raw value from CSV column 7
@@ -140,7 +140,10 @@ const isValidTime = (timeStr: string): boolean => {
   return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr);
 };
 
-export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[]): Trip[] => {
+// Type for the return value of convertImportedTrips, explicitly omitting 'id' and 'user_id'
+type ConvertedTrip = Omit<Trip, 'id' | 'user_id'>;
+
+export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[]): ConvertedTrip[] => {
   // Assign all trips to the first vehicle in the list
   const targetVehicleId = vehicles[0]?.id;
 
@@ -165,9 +168,10 @@ export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[])
         throw new Error(`Konvertierungsfehler: End-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalEndOdometerValue}"`);
     }
 
+    // Return the object WITHOUT the 'id' field
     return {
       ...tripData,
-      id: generateId(),
+      // id: generateId(), // REMOVED THIS LINE
       vehicleId: targetVehicleId, // Assign the ID of the first vehicle
       startOdometer: startOdometer, // Assign the parsed value
       endOdometer: endOdometer, // Assign the parsed value

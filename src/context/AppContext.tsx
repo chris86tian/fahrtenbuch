@@ -83,19 +83,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       try {
         setLoading(true);
+        console.log("AppContext: Loading vehicles for user:", user.id);
         const { data, error } = await supabase
           .from('vehicles')
           .select('*')
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Fehler beim Laden der Fahrzeuge:', error);
+          console.error('AppContext: Fehler beim Laden der Fahrzeuge:', error);
           return;
         }
 
+        console.log("AppContext: Vehicles loaded:", data);
         setVehicles(data || []);
       } catch (error) {
-        console.error('Fehler beim Laden der Fahrzeuge:', error);
+        console.error('AppContext: Fehler beim Laden der Fahrzeuge:', error);
       } finally {
         setLoading(false);
       }
@@ -114,19 +116,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       try {
         setLoading(true);
+        console.log("AppContext: Loading trips for user:", user.id);
         const { data, error } = await supabase
           .from('trips')
           .select('*')
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Fehler beim Laden der Fahrten:', error);
+          console.error('AppContext: Fehler beim Laden der Fahrten:', error);
           return;
         }
 
+        console.log("AppContext: Trips loaded:", data);
         setTrips(data || []);
       } catch (error) {
-        console.error('Fehler beim Laden der Fahrten:', error);
+        console.error('AppContext: Fehler beim Laden der Fahrten:', error);
       } finally {
         setLoading(false);
       }
@@ -162,7 +166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Adding vehicle:", vehicle);
     try {
       const { data, error } = await supabase
         .from('vehicles')
@@ -170,12 +174,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select();
 
       if (error) {
-        console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
+        console.error('AppContext: Fehler beim Hinzufügen des Fahrzeugs:', error);
         return;
       }
 
       if (data && data.length > 0) {
         const newVehicle = data[0] as Vehicle;
+        console.log("AppContext: Vehicle added successfully:", newVehicle);
         setVehicles(prev => [...prev, newVehicle]);
         
         if (!activeVehicle) {
@@ -183,13 +188,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (error) {
-      console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
+      console.error('AppContext: Fehler beim Hinzufügen des Fahrzeugs:', error);
     }
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Updating vehicle:", vehicle);
     try {
       const { error } = await supabase
         .from('vehicles')
@@ -198,23 +203,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Fehler beim Aktualisieren des Fahrzeugs:', error);
+        console.error('AppContext: Fehler beim Aktualisieren des Fahrzeugs:', error);
         return;
       }
-
+      console.log("AppContext: Vehicle updated successfully.");
       setVehicles(prev => prev.map(v => (v.id === vehicle.id ? vehicle : v)));
       
       if (activeVehicle?.id === vehicle.id) {
         setActiveVehicle(vehicle);
       }
     } catch (error) {
-      console.error('Fehler beim Aktualisieren des Fahrzeugs:', error);
+      console.error('AppContext: Fehler beim Aktualisieren des Fahrzeugs:', error);
     }
   };
 
   const deleteVehicle = async (id: string) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Deleting vehicle:", id);
     try {
       const { error } = await supabase
         .from('vehicles')
@@ -223,10 +228,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Fehler beim Löschen des Fahrzeugs:', error);
+        console.error('AppContext: Fehler beim Löschen des Fahrzeugs:', error);
         return;
       }
-
+      console.log("AppContext: Vehicle deleted successfully.");
       setVehicles(prev => prev.filter(v => v.id !== id));
       
       if (activeVehicle?.id === id) {
@@ -237,13 +242,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Wir müssen aber auch den lokalen Zustand aktualisieren
       setTrips(prev => prev.filter(t => t.vehicleId !== id));
     } catch (error) {
-      console.error('Fehler beim Löschen des Fahrzeugs:', error);
+      console.error('AppContext: Fehler beim Löschen des Fahrzeugs:', error);
     }
   };
 
   const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Adding trip:", trip);
     try {
       const { data, error } = await supabase
         .from('trips')
@@ -251,12 +256,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select();
 
       if (error) {
-        console.error('Fehler beim Hinzufügen der Fahrt:', error);
-        return;
+        console.error('AppContext: Fehler beim Hinzufügen der Fahrt:', error);
+        // Optionally: throw error or display a message to the user
+        return; // Stop execution if there's an error
       }
 
       if (data && data.length > 0) {
         const newTrip = data[0] as Trip;
+        console.log("AppContext: Trip added successfully:", newTrip);
         setTrips(prev => [...prev, newTrip]);
         
         // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs
@@ -269,15 +276,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         }
+      } else {
+         console.warn("AppContext: Add trip returned no data or error.");
       }
     } catch (error) {
-      console.error('Fehler beim Hinzufügen der Fahrt:', error);
+      console.error('AppContext: Fehler beim Hinzufügen der Fahrt (catch block):', error);
     }
   };
 
   const updateTrip = async (trip: Trip) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Updating trip:", trip);
     try {
       const { error } = await supabase
         .from('trips')
@@ -286,10 +295,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Fehler beim Aktualisieren der Fahrt:', error);
+        console.error('AppContext: Fehler beim Aktualisieren der Fahrt:', error);
         return;
       }
-
+      console.log("AppContext: Trip updated successfully.");
       setTrips(prev => prev.map(t => (t.id === trip.id ? trip : t)));
       
       // Aktualisiere den Kilometerstand des Fahrzeugs, wenn dies die neueste Fahrt ist
@@ -307,13 +316,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (error) {
-      console.error('Fehler beim Aktualisieren der Fahrt:', error);
+      console.error('AppContext: Fehler beim Aktualisieren der Fahrt:', error);
     }
   };
 
   const deleteTrip = async (id: string) => {
     if (!isAuthenticated || !user) return;
-
+    console.log("AppContext: Deleting trip:", id);
     try {
       const { error } = await supabase
         .from('trips')
@@ -322,13 +331,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('user_id', user.id);
 
       if (error) {
-        console.error('Fehler beim Löschen der Fahrt:', error);
+        console.error('AppContext: Fehler beim Löschen der Fahrt:', error);
         return;
       }
-
+      console.log("AppContext: Trip deleted successfully.");
       setTrips(prev => prev.filter(t => t.id !== id));
     } catch (error) {
-      console.error('Fehler beim Löschen der Fahrt:', error);
+      console.error('AppContext: Fehler beim Löschen der Fahrt:', error);
     }
   };
 

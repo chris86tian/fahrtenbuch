@@ -25,38 +25,52 @@ const ImportDialog: React.FC<ImportDialogProps> = ({ isOpen, onClose, onImport }
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.log("ImportDialog: File selected:", file.name);
     setIsProcessing(true);
     setErrors([]);
 
     // Check if a vehicle exists before processing
     if (!targetVehicle) {
+        console.error("ImportDialog: No target vehicle found.");
         setErrors(['Kein Fahrzeug im System gefunden. Bitte legen Sie zuerst ein Fahrzeug an, um Fahrten importieren zu können.']);
         setIsProcessing(false);
         return;
     }
+    console.log("ImportDialog: Target vehicle:", targetVehicle.licensePlate);
 
     try {
       const content = await file.text();
-      const importedTrips = parseCSV(content);
+      console.log("ImportDialog: File content read.");
       
-      // Validate the imported data (now without license plate check)
-      const validation = validateImportedTrips(importedTrips, vehicles); // Pass vehicles for the check if one exists
+      const importedTripsRaw = parseCSV(content);
+      console.log("ImportDialog: Parsed trips (raw):", importedTripsRaw);
+      
+      // Validate the imported data
+      const validation = validateImportedTrips(importedTripsRaw, vehicles); 
+      console.log("ImportDialog: Validation result:", validation);
       
       if (!validation.valid) {
         setErrors(validation.errors);
         setIsProcessing(false); // Stop processing on validation errors
+        console.error("ImportDialog: Validation failed.", validation.errors);
         return;
       }
+      console.log("ImportDialog: Validation successful.");
 
       // Convert to our Trip format, assigning to the first vehicle
-      const trips = convertImportedTrips(importedTrips, vehicles); 
-      onImport(trips);
+      const tripsToImport = convertImportedTrips(importedTripsRaw, vehicles); 
+      console.log("ImportDialog: Converted trips:", tripsToImport);
+
+      onImport(tripsToImport); // Call the function passed from Dashboard
+      console.log("ImportDialog: onImport called successfully.");
+      
       onClose(); // Close dialog on successful import
     } catch (error) {
-      console.error("Import Error:", error);
+      console.error("ImportDialog: Error during import process:", error);
       setErrors([`Fehler beim Verarbeiten der Datei: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}. Bitte überprüfen Sie das Dateiformat und die Daten.`]);
     } finally {
       setIsProcessing(false);
+      console.log("ImportDialog: Processing finished.");
       // Reset file input value so the same file can be selected again if needed
       if (fileInputRef.current) {
         fileInputRef.current.value = ''; 
