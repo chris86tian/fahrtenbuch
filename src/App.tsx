@@ -8,6 +8,7 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Settings from './pages/Settings';
+import RecordTrip from './pages/RecordTrip'; // Import the new page
 import LoadingIndicator from './components/LoadingIndicator';
 import './index.css';
 
@@ -24,13 +25,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Component to handle the main application layout and page switching
 const AppLayout: React.FC = () => {
-  const [activePage, setActivePage] = useState<'dashboard' | 'vehicles' | 'settings'>('dashboard');
+  // Added 'record-trip' to the state type
+  const [activePage, setActivePage] = useState<'dashboard' | 'vehicles' | 'settings' | 'record-trip'>('dashboard');
 
   return (
     <Layout activePage={activePage} onNavigate={setActivePage}>
       {activePage === 'dashboard' && <Dashboard />}
       {activePage === 'vehicles' && <Vehicles />}
       {activePage === 'settings' && <Settings />}
+      {activePage === 'record-trip' && <RecordTrip />} {/* Added conditional render */}
     </Layout>
   );
 };
@@ -91,7 +94,15 @@ function App() {
                 </AppProvider>
               </ProtectedRoute>
             }
-          />
+          >
+             {/* Added nested route for the new page */}
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="vehicles" element={<Vehicles />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="record-trip" element={<RecordTrip />} />
+            {/* Redirect /app to /app/dashboard by default */}
+            <Route index element={<Navigate to="dashboard" replace />} />
+          </Route>
 
           {/* Fallback: Redirect to landing or app based on auth state */}
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Car, BarChart2, Settings as SettingsIcon, Menu, X, LogOut } from 'lucide-react';
+import { Car, BarChart2, Settings as SettingsIcon, Menu, X, LogOut, PlusCircle } from 'lucide-react'; // Added PlusCircle
 import { useAuth } from '../context/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
-  activePage: 'dashboard' | 'vehicles' | 'settings';
-  onNavigate: (page: 'dashboard' | 'vehicles' | 'settings') => void;
+  activePage: 'dashboard' | 'vehicles' | 'settings' | 'record-trip'; // Added 'record-trip'
+  onNavigate: (page: 'dashboard' | 'vehicles' | 'settings' | 'record-trip') => void; // Added 'record-trip'
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
@@ -24,17 +24,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
     logout();
   };
 
-  const NavItem = ({ 
-    icon, 
-    label, 
-    page 
-  }: { 
-    icon: React.ReactNode; 
-    label: string; 
-    page: 'dashboard' | 'vehicles' | 'settings';
+  const NavItem = ({
+    icon,
+    label,
+    page
+  }: {
+    icon: React.ReactNode;
+    label: string;
+    page: 'dashboard' | 'vehicles' | 'settings' | 'record-trip'; // Added 'record-trip'
   }) => {
     const isActive = activePage === page;
-    
+
     return (
       <button
         onClick={() => {
@@ -57,14 +57,14 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
     <div className="min-h-screen bg-gray-100 flex">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden" 
+        <div
+          className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
           onClick={closeSidebar}
         />
       )}
 
       {/* Sidebar */}
-      <div 
+      <div
         className={`fixed inset-y-0 left-0 z-30 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
@@ -76,25 +76,31 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
               <X size={24} className="text-gray-500" />
             </button>
           </div>
-          
+
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            <NavItem 
-              icon={<BarChart2 size={20} />} 
-              label="Dashboard" 
-              page="dashboard" 
+             {/* New NavItem for recording trips */}
+            <NavItem
+              icon={<PlusCircle size={20} />}
+              label="Neue Fahrt erfassen"
+              page="record-trip"
             />
-            <NavItem 
-              icon={<Car size={20} />} 
-              label="Fahrzeuge" 
-              page="vehicles" 
+            <NavItem
+              icon={<BarChart2 size={20} />}
+              label="Dashboard"
+              page="dashboard"
             />
-            <NavItem 
-              icon={<SettingsIcon size={20} />} 
-              label="Einstellungen" 
-              page="settings" 
+            <NavItem
+              icon={<Car size={20} />}
+              label="Fahrzeuge"
+              page="vehicles"
+            />
+            <NavItem
+              icon={<SettingsIcon size={20} />}
+              label="Einstellungen"
+              page="settings"
             />
           </nav>
-          
+
           <div className="p-4 border-t border-gray-200">
             <button
               onClick={handleLogout}
@@ -114,8 +120,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
       <div className="flex-1 flex flex-col">
         <header className="bg-white shadow-sm z-10">
           <div className="px-4 py-3 flex items-center justify-between">
-            <button 
-              className="lg:hidden" 
+            <button
+              className="lg:hidden"
               onClick={toggleSidebar}
             >
               <Menu size={24} className="text-gray-500" />
@@ -124,6 +130,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
               {activePage === 'dashboard' && 'Dashboard'}
               {activePage === 'vehicles' && 'Fahrzeuge'}
               {activePage === 'settings' && 'Einstellungen'}
+              {activePage === 'record-trip' && 'Neue Fahrt erfassen'} {/* Added mobile header text */}
             </h1>
             <div className="lg:hidden">
               {/* Placeholder for header right content on mobile */}

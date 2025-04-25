@@ -179,7 +179,7 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-0">
+        <div className="p-0 overflow-x-auto"> {/* Added overflow-x-auto for table responsiveness */}
           <TripList
             trips={filteredTrips}
             vehicles={vehicles}

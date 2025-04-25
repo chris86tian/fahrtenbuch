@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { Trip, Vehicle, TripPurpose } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -10,8 +10,8 @@ interface TripFormProps {
 }
 
 const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel }) => {
-  const { vehicles } = useAppContext();
-  
+  const { vehicles, trips } = useAppContext(); // Get trips from context
+
   const [selectedVehicleId, setSelectedVehicleId] = useState(trip?.vehicleId || vehicleId || '');
   const [date, setDate] = useState(trip?.date || new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState(trip?.startTime || '');
@@ -28,6 +28,17 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
   // Get the selected vehicle
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
+  // Extract unique driver names from all trips
+  const uniqueDrivers = useMemo(() => {
+    const drivers = new Set<string>();
+    trips.forEach(t => {
+      if (t.driverName) {
+        drivers.add(t.driverName);
+      }
+    });
+    return Array.from(drivers).sort(); // Sort alphabetically
+  }, [trips]);
+
   // Set initial odometer readings from vehicle when creating a new trip
   useEffect(() => {
     if (!trip && selectedVehicle && selectedVehicle.currentOdometer > 0) {
@@ -43,7 +54,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     onSubmit({
       vehicleId: selectedVehicleId,
       date,
@@ -100,14 +111,28 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
           <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
             Fahrer
           </label>
-          <input
-            type="text"
+          {/* Replaced input with select for driver selection */}
+          <select
             id="driverName"
             value={driverName}
             onChange={(e) => setDriverName(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
             required
-          />
+          >
+            <option value="">Fahrer wählen oder eingeben</option>
+            {uniqueDrivers.map((driver) => (
+              <option key={driver} value={driver}>
+                {driver}
+              </option>
+            ))}
+             {/* Option to allow typing a new driver if needed */}
+             {driverName && !uniqueDrivers.includes(driverName) && (
+                <option value={driverName}>{driverName} (Neu)</option>
+             )}
+          </select>
+           {/* Optional: Add an input field if the user wants to type a new driver */}
+           {/* This would require more complex state management (e.g., a combobox) */}
+           {/* For now, we'll stick to selecting from existing or the current value */}
         </div>
       </div>
 
@@ -142,8 +167,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
       </div>
 
       <div>
+        {/* Removed "(mit Adresse)" */}
         <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
-          Startort (mit Adresse)
+          Startort
         </label>
         <input
           type="text"
@@ -156,8 +182,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
       </div>
 
       <div>
+        {/* Removed "(mit Adresse)" */}
         <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
-          Zielort (mit Adresse)
+          Zielort
         </label>
         <input
           type="text"
