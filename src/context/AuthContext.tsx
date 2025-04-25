@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
+import LoadingIndicator from '../components/LoadingIndicator';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -19,10 +20,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Prüfen, ob der Benutzer bereits angemeldet ist
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-      setUser(session?.user || null);
-      setLoading(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setIsAuthenticated(!!session);
+        setUser(session?.user || null);
+      } catch (error) {
+        console.error("Error checking session:", error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkSession();
@@ -40,7 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // Remove the hardcoded check - rely solely on Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -74,8 +79,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   if (loading) {
-    // Einfacher Ladeindikator während der Sitzungsprüfung
-    return <div>Lädt...</div>;
+    // Zeige LoadingIndicator während der Sitzungsprüfung
+    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
   }
 
   return (

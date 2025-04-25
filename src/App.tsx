@@ -22,7 +22,6 @@ const AppLayout: React.FC = () => {
 
   return (
     <Layout activePage={activePage} onNavigate={setActivePage}>
-      {/* Corrected: Use && instead of &amp;&amp; */}
       {activePage === 'dashboard' && <Dashboard />}
       {activePage === 'vehicles' && <Vehicles />}
       {activePage === 'settings' && <Settings />}
@@ -32,22 +31,20 @@ const AppLayout: React.FC = () => {
 
 // Component to conditionally render Login or redirect to App
 const LoginRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth(); // Needs AuthProvider
+  const { isAuthenticated } = useAuth();
   return isAuthenticated ? <Navigate to="/app" replace /> : <LoginPage />;
 };
 
 // Component to conditionally render Landing or redirect to App
 const LandingRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth(); // Needs AuthProvider
+  const { isAuthenticated } = useAuth();
   return isAuthenticated ? <Navigate to="/app" replace /> : <LandingPage />;
 };
-
 
 function App() {
   return (
     <Router>
-      {/* AuthProvider wraps EVERYTHING because Landing/Login routes use useAuth */}
-      <AuthProvider> 
+      <AuthProvider>
         <Routes>
           {/* Public routes - Do NOT need AppProvider */}
           <Route path="/" element={<LandingRoute />} />
@@ -55,29 +52,18 @@ function App() {
           
           {/* Protected application route - NEEDS AppProvider */}
           <Route
-            path="/app" // Base path for the protected app area
+            path="/app/*"
             element={
               <ProtectedRoute>
-                {/* Wrap protected area with AppProvider */}
-                <AppProvider> 
-                  <AppLayout /> 
+                <AppProvider>
+                  <AppLayout />
                 </AppProvider>
               </ProtectedRoute>
             }
-          >
-            {/* Define sub-routes for the protected area if needed */}
-            {/* These will inherit AppProvider from the parent route element */}
-            {/* <Route path="dashboard" element={<Dashboard />} /> */}
-            {/* <Route path="vehicles" element={<Vehicles />} /> */}
-            {/* <Route path="settings" element={<Settings />} /> */}
-            {/* Add an index route for /app */}
-            {/* The element rendered here is AppLayout, which handles page switching */}
-            <Route index element={<Navigate to="/app/dashboard" replace />} /> 
-          </Route>
+          />
 
           {/* Fallback: Redirect to landing or app based on auth state */}
-          {/* Consider adding a dedicated 404 component */}
-          <Route path="*" element={<Navigate to="/" replace />} /> 
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </Router>

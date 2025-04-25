@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import ReminderSettings from '../components/ReminderSettings';
 import ImportDialog from '../components/ImportDialog';
+import SupabaseConnectionAssistant from '../components/SupabaseConnectionAssistant';
 import { useAppContext } from '../context/AppContext';
 import { tripsToCSV, createMonthlySummary, createYearlySummary, createTaxAuthorityReport } from '../utils/exportToExcel';
 import { downloadExcel } from '../utils/helpers';
-import { Download, Upload, FileText } from 'lucide-react';
+import { updateSupabaseConnection, getCurrentSupabaseConnection } from '../utils/supabaseClient';
+import { Download, Upload, FileText, Database } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const { trips, vehicles, addTrip } = useAppContext();
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showConnectionAssistant, setShowConnectionAssistant] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   // Get available years from trips
@@ -51,9 +54,36 @@ const Settings: React.FC = () => {
     });
   };
 
+  const handleSupabaseConnect = (url: string, key: string) => {
+    updateSupabaseConnection(url, key);
+    setShowConnectionAssistant(false);
+  };
+
   return (
     <div className="space-y-6">
       <ReminderSettings />
+
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Supabase-Verbindung</h2>
+        <p className="text-gray-600 mb-4">
+          Konfigurieren Sie die Verbindung zu Ihrer Supabase-Instanz. Sie können zwischen der Standard-Instanz und Ihrer selbst gehosteten Instanz wechseln.
+        </p>
+
+        <button
+          onClick={() => setShowConnectionAssistant(true)}
+          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          <Database size={18} className="mr-2" />
+          Supabase-Verbindung konfigurieren
+        </button>
+
+        <div className="mt-4 p-4 bg-gray-50 rounded-md">
+          <h3 className="text-sm font-medium text-gray-800 mb-1">Aktuelle Verbindung</h3>
+          <p className="text-sm text-gray-600 truncate">
+            {getCurrentSupabaseConnection().url || 'Keine Verbindung konfiguriert'}
+          </p>
+        </div>
+      </div>
 
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Datenimport & -export</h2>
@@ -172,6 +202,15 @@ const Settings: React.FC = () => {
         onImport={handleImportTrips}
         vehicles={vehicles}
       />
+
+      {showConnectionAssistant && (
+        <SupabaseConnectionAssistant
+          onConnect={handleSupabaseConnect}
+          onCancel={() => setShowConnectionAssistant(false)}
+          currentUrl={getCurrentSupabaseConnection().url}
+          currentKey={getCurrentSupabaseConnection().key}
+        />
+      )}
     </div>
   );
 };
