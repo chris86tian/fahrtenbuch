@@ -8,12 +8,11 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   server: {
-    host: true, // Listen on all addresses
+    host: '0.0.0.0', // Listen on all addresses
     port: parseInt(process.env.PORT || '3000')
   },
   preview: {
-    host: true, // Listen on all addresses
-    port: parseInt(process.env.PORT || '3000'),
-    allowedHosts: ['flottlog.lipahub.de', 'localhost']
+    host: '0.0.0.0', // Listen on all addresses
+    port: parseInt(process.env.PORT || '3000')
   }
 });
