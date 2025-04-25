@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Trip, Vehicle, ReminderSettings, DashboardStats } from '../types';
-import { generateId } from '../utils/helpers';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from './AuthContext';
 
 interface AppContextType {
   vehicles: Vehicle[];
@@ -8,14 +9,15 @@ interface AppContextType {
   reminderSettings: ReminderSettings;
   stats: DashboardStats;
   activeVehicle: Vehicle | null;
-  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => void;
-  updateVehicle: (vehicle: Vehicle) => void;
-  deleteVehicle: (id: string) => void;
+  addVehicle: (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => Promise<void>;
+  updateVehicle: (vehicle: Vehicle) => Promise<void>;
+  deleteVehicle: (id: string) => Promise<void>;
   setActiveVehicle: (vehicle: Vehicle | null) => void;
-  addTrip: (trip: Omit<Trip, 'id'>) => void;
-  updateTrip: (trip: Trip) => void;
-  deleteTrip: (id: string) => void;
+  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<void>;
+  updateTrip: (trip: Trip) => Promise<void>;
+  deleteTrip: (id: string) => Promise<void>;
   updateReminderSettings: (settings: ReminderSettings) => void;
+  loading: boolean;
 }
 
 const defaultReminderSettings: ReminderSettings = {
@@ -62,105 +64,272 @@ const calculateStats = (trips: Trip[]): DashboardStats => {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>(() => {
-    const savedVehicles = localStorage.getItem('vehicles');
-    return savedVehicles ? JSON.parse(savedVehicles) : [];
-  });
-
-  const [trips, setTrips] = useState<Trip[]>(() => {
-    const savedTrips = localStorage.getItem('trips');
-    return savedTrips ? JSON.parse(savedTrips) : [];
-  });
-
-  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(() => {
-    const savedSettings = localStorage.getItem('reminderSettings');
-    return savedSettings ? JSON.parse(savedSettings) : defaultReminderSettings;
-  });
-
+  const { isAuthenticated, user } = useAuth();
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(defaultReminderSettings);
   const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
-
   const [stats, setStats] = useState<DashboardStats>(() => calculateStats(trips));
+  const [loading, setLoading] = useState(true);
 
+  // Fahrzeuge aus Supabase laden
   useEffect(() => {
-    localStorage.setItem('vehicles', JSON.stringify(vehicles));
-  }, [vehicles]);
+    const loadVehicles = async () => {
+      if (!isAuthenticated || !user) {
+        setVehicles([]);
+        setLoading(false);
+        return;
+      }
 
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Fehler beim Laden der Fahrzeuge:', error);
+          return;
+        }
+
+        setVehicles(data || []);
+      } catch (error) {
+        console.error('Fehler beim Laden der Fahrzeuge:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadVehicles();
+  }, [isAuthenticated, user]);
+
+  // Fahrten aus Supabase laden
   useEffect(() => {
-    localStorage.setItem('trips', JSON.stringify(trips));
+    const loadTrips = async () => {
+      if (!isAuthenticated || !user) {
+        setTrips([]);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('trips')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Fehler beim Laden der Fahrten:', error);
+          return;
+        }
+
+        setTrips(data || []);
+      } catch (error) {
+        console.error('Fehler beim Laden der Fahrten:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTrips();
+  }, [isAuthenticated, user]);
+
+  // Statistiken aktualisieren, wenn sich die Fahrten ändern
+  useEffect(() => {
     setStats(calculateStats(trips));
   }, [trips]);
 
-  useEffect(() => {
-    localStorage.setItem('reminderSettings', JSON.stringify(reminderSettings));
-  }, [reminderSettings]);
-
+  // Aktives Fahrzeug setzen, wenn Fahrzeuge geladen werden
   useEffect(() => {
     if (vehicles.length > 0 && !activeVehicle) {
       setActiveVehicle(vehicles[0]);
     }
   }, [vehicles, activeVehicle]);
 
-  const addVehicle = (vehicle: Omit<Vehicle, 'id'>) => {
-    const newVehicle = { ...vehicle, id: generateId() };
-    setVehicles(prev => [...prev, newVehicle]);
-    if (!activeVehicle) {
-      setActiveVehicle(newVehicle);
+  // Erinnerungseinstellungen aus localStorage laden (bleibt vorerst in localStorage)
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('reminderSettings');
+    if (savedSettings) {
+      setReminderSettings(JSON.parse(savedSettings));
+    }
+  }, []);
+
+  // Erinnerungseinstellungen in localStorage speichern
+  useEffect(() => {
+    localStorage.setItem('reminderSettings', JSON.stringify(reminderSettings));
+  }, [reminderSettings]);
+
+  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert([{ ...vehicle, user_id: user.id }])
+        .select();
+
+      if (error) {
+        console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const newVehicle = data[0] as Vehicle;
+        setVehicles(prev => [...prev, newVehicle]);
+        
+        if (!activeVehicle) {
+          setActiveVehicle(newVehicle);
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen des Fahrzeugs:', error);
     }
   };
 
-  const updateVehicle = (vehicle: Vehicle) => {
-    setVehicles(prev => prev.map(v => (v.id === vehicle.id ? vehicle : v)));
-    if (activeVehicle?.id === vehicle.id) {
-      setActiveVehicle(vehicle);
+  const updateVehicle = async (vehicle: Vehicle) => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .update(vehicle)
+        .eq('id', vehicle.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Fehler beim Aktualisieren des Fahrzeugs:', error);
+        return;
+      }
+
+      setVehicles(prev => prev.map(v => (v.id === vehicle.id ? vehicle : v)));
+      
+      if (activeVehicle?.id === vehicle.id) {
+        setActiveVehicle(vehicle);
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des Fahrzeugs:', error);
     }
   };
 
-  const deleteVehicle = (id: string) => {
-    setVehicles(prev => prev.filter(v => v.id !== id));
-    if (activeVehicle?.id === id) {
-      setActiveVehicle(vehicles.length > 1 ? vehicles.find(v => v.id !== id) || null : null);
-    }
-    // Also delete all trips for this vehicle
-    setTrips(prev => prev.filter(t => t.vehicleId !== id));
-  };
+  const deleteVehicle = async (id: string) => {
+    if (!isAuthenticated || !user) return;
 
-  const addTrip = (trip: Omit<Trip, 'id'>) => {
-    const newTrip = { ...trip, id: generateId() };
-    setTrips(prev => [...prev, newTrip]);
-    
-    // Update the current odometer reading for the vehicle
-    if (trip.endOdometer > 0) {
-      setVehicles(prev => 
-        prev.map(v => 
-          v.id === trip.vehicleId 
-            ? { ...v, currentOdometer: Math.max(v.currentOdometer, trip.endOdometer) } 
-            : v
-        )
-      );
-    }
-  };
+    try {
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
 
-  const updateTrip = (trip: Trip) => {
-    setTrips(prev => prev.map(t => (t.id === trip.id ? trip : t)));
-    
-    // Update the vehicle's current odometer if this is the latest trip
-    const vehicleTrips = trips
-      .filter(t => t.vehicleId === trip.vehicleId)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    if (vehicleTrips.length > 0 && vehicleTrips[0].id === trip.id) {
-      setVehicles(prev => 
-        prev.map(v => 
-          v.id === trip.vehicleId 
-            ? { ...v, currentOdometer: trip.endOdometer } 
-            : v
-        )
-      );
+      if (error) {
+        console.error('Fehler beim Löschen des Fahrzeugs:', error);
+        return;
+      }
+
+      setVehicles(prev => prev.filter(v => v.id !== id));
+      
+      if (activeVehicle?.id === id) {
+        setActiveVehicle(vehicles.length > 1 ? vehicles.find(v => v.id !== id) || null : null);
+      }
+      
+      // Fahrten werden automatisch durch die Datenbank-Constraints gelöscht (ON DELETE CASCADE)
+      // Wir müssen aber auch den lokalen Zustand aktualisieren
+      setTrips(prev => prev.filter(t => t.vehicleId !== id));
+    } catch (error) {
+      console.error('Fehler beim Löschen des Fahrzeugs:', error);
     }
   };
 
-  const deleteTrip = (id: string) => {
-    setTrips(prev => prev.filter(t => t.id !== id));
+  const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>) => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('trips')
+        .insert([{ ...trip, user_id: user.id }])
+        .select();
+
+      if (error) {
+        console.error('Fehler beim Hinzufügen der Fahrt:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const newTrip = data[0] as Trip;
+        setTrips(prev => [...prev, newTrip]);
+        
+        // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs
+        if (trip.endOdometer > 0) {
+          const vehicle = vehicles.find(v => v.id === trip.vehicleId);
+          if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
+            updateVehicle({
+              ...vehicle,
+              currentOdometer: trip.endOdometer
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen der Fahrt:', error);
+    }
+  };
+
+  const updateTrip = async (trip: Trip) => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('trips')
+        .update(trip)
+        .eq('id', trip.id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Fehler beim Aktualisieren der Fahrt:', error);
+        return;
+      }
+
+      setTrips(prev => prev.map(t => (t.id === trip.id ? trip : t)));
+      
+      // Aktualisiere den Kilometerstand des Fahrzeugs, wenn dies die neueste Fahrt ist
+      const vehicleTrips = trips
+        .filter(t => t.vehicleId === trip.vehicleId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      if (vehicleTrips.length > 0 && vehicleTrips[0].id === trip.id) {
+        const vehicle = vehicles.find(v => v.id === trip.vehicleId);
+        if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
+          updateVehicle({
+            ...vehicle,
+            currentOdometer: trip.endOdometer
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Fahrt:', error);
+    }
+  };
+
+  const deleteTrip = async (id: string) => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const { error } = await supabase
+        .from('trips')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Fehler beim Löschen der Fahrt:', error);
+        return;
+      }
+
+      setTrips(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error('Fehler beim Löschen der Fahrt:', error);
+    }
   };
 
   const updateReminderSettings = (settings: ReminderSettings) => {
@@ -183,6 +352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateTrip,
         deleteTrip,
         updateReminderSettings,
+        loading
       }}
     >
       {children}

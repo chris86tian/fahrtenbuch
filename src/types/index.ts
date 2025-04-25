@@ -1,18 +1,21 @@
 export type Vehicle = {
-  id: string;
+  id: string; // Supabase UUID
+  user_id: string; // Foreign key to auth.users
   licensePlate: string;
   make: string;
   model: string;
   year: number;
   initialOdometer: number;
   currentOdometer: number;
+  created_at?: string; // Optional: Supabase timestamp
 };
 
 export type TripPurpose = 'business' | 'private' | 'commute';
 
 export type Trip = {
-  id: string;
-  vehicleId: string;
+  id: string; // Supabase UUID
+  user_id: string; // Foreign key to auth.users
+  vehicleId: string; // Foreign key to vehicles table
   date: string;
   startTime: string;
   endTime: string;
@@ -23,6 +26,7 @@ export type Trip = {
   endOdometer: number;
   driverName: string;
   notes?: string;
+  created_at?: string; // Optional: Supabase timestamp
 };
 
 export type ReminderSettings = {

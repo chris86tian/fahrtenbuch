@@ -2,13 +2,24 @@ import React, { useState } from 'react';
 import ReminderSettings from '../components/ReminderSettings';
 import ImportDialog from '../components/ImportDialog';
 import { useAppContext } from '../context/AppContext';
-import { tripsToCSV, createMonthlySummary, createYearlySummary } from '../utils/exportToExcel';
+import { tripsToCSV, createMonthlySummary, createYearlySummary, createTaxAuthorityReport } from '../utils/exportToExcel';
 import { downloadExcel } from '../utils/helpers';
-import { Download, Upload } from 'lucide-react';
+import { Download, Upload, FileText } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const { trips, vehicles, addTrip } = useAppContext();
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  // Get available years from trips
+  const availableYears = React.useMemo(() => {
+    const years = new Set<number>();
+    trips.forEach(trip => {
+      const year = new Date(trip.date).getFullYear();
+      years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a); // Sort descending
+  }, [trips]);
 
   const handleExportAllTrips = () => {
     const filename = `Fahrtenbuch_Alle_${new Date().toISOString().split('T')[0]}.csv`;
@@ -25,6 +36,12 @@ const Settings: React.FC = () => {
   const handleExportYearlySummary = () => {
     const filename = `Fahrtenbuch_Jahreszusammenfassung_${new Date().toISOString().split('T')[0]}.csv`;
     const csvData = createYearlySummary(trips, vehicles);
+    downloadExcel(csvData, filename);
+  };
+
+  const handleExportTaxReport = () => {
+    const filename = `Fahrtenbuch_Finanzamt_${selectedYear}_${new Date().toISOString().split('T')[0]}.csv`;
+    const csvData = createTaxAuthorityReport(trips, vehicles, selectedYear);
     downloadExcel(csvData, filename);
   };
 
@@ -86,6 +103,57 @@ const Settings: React.FC = () => {
             Sie müssen zuerst Fahrten hinzufügen, bevor Sie Daten exportieren können.
           </p>
         )}
+      </div>
+
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Finanzamtbericht</h2>
+        <p className="text-gray-600 mb-4">
+          Erstellen Sie einen Jahresbericht für das Finanzamt mit allen relevanten Informationen für die Steuererklärung.
+        </p>
+
+        <div className="mb-4">
+          <label htmlFor="tax-year" className="block text-sm font-medium text-gray-700 mb-1">
+            Steuerjahr auswählen
+          </label>
+          <select
+            id="tax-year"
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+          >
+            {availableYears.length > 0 ? (
+              availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))
+            ) : (
+              <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+            )}
+          </select>
+        </div>
+
+        <button
+          onClick={handleExportTaxReport}
+          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"
+          disabled={trips.length === 0}
+        >
+          <FileText size={18} className="mr-2" />
+          Finanzamtbericht {selectedYear} exportieren
+        </button>
+
+        {trips.length === 0 && (
+          <p className="mt-3 text-sm text-gray-500">
+            Sie müssen zuerst Fahrten hinzufügen, bevor Sie einen Finanzamtbericht erstellen können.
+          </p>
+        )}
+
+        <div className="mt-4 p-4 bg-yellow-50 rounded-md">
+          <h3 className="text-sm font-medium text-yellow-800 mb-1">Hinweis zur Steuererklärung</h3>
+          <p className="text-sm text-yellow-700">
+            Der Finanzamtbericht enthält alle relevanten Informationen für Ihre Steuererklärung, einschließlich der 
+            Gesamtkilometer, geschäftlichen Kilometer und des geschäftlichen Anteils in Prozent. Diese Daten können 
+            Sie für die Berechnung der steuerlich absetzbaren Fahrzeugkosten verwenden.
+          </p>
+        </div>
       </div>
 
       <div className="bg-white shadow rounded-lg p-6">

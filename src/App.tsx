@@ -32,13 +32,13 @@ const AppLayout: React.FC = () => {
 
 // Component to conditionally render Login or redirect to App
 const LoginRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth(); // Needs AuthProvider
   return isAuthenticated ? <Navigate to="/app" replace /> : <LoginPage />;
 };
 
 // Component to conditionally render Landing or redirect to App
 const LandingRoute: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth(); // Needs AuthProvider
   return isAuthenticated ? <Navigate to="/app" replace /> : <LandingPage />;
 };
 
@@ -46,38 +46,40 @@ const LandingRoute: React.FC = () => {
 function App() {
   return (
     <Router>
-      {/* AppProvider can be outside AuthProvider if it doesn't need auth state */}
-      <AppProvider> 
-        {/* AuthProvider wraps all Routes */}
-        <AuthProvider> 
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<LandingRoute />} />
-            <Route path="/login" element={<LoginRoute />} />
-            
-            {/* Protected application route */}
-            <Route
-              path="/app" // Base path for the protected app area
-              element={
-                <ProtectedRoute>
+      {/* AuthProvider wraps EVERYTHING because Landing/Login routes use useAuth */}
+      <AuthProvider> 
+        <Routes>
+          {/* Public routes - Do NOT need AppProvider */}
+          <Route path="/" element={<LandingRoute />} />
+          <Route path="/login" element={<LoginRoute />} />
+          
+          {/* Protected application route - NEEDS AppProvider */}
+          <Route
+            path="/app" // Base path for the protected app area
+            element={
+              <ProtectedRoute>
+                {/* Wrap protected area with AppProvider */}
+                <AppProvider> 
                   <AppLayout /> 
-                </ProtectedRoute>
-              }
-            >
-              {/* Define sub-routes for the protected area if needed */}
-              {/* <Route path="dashboard" element={<Dashboard />} /> */}
-              {/* <Route path="vehicles" element={<Vehicles />} /> */}
-              {/* <Route path="settings" element={<Settings />} /> */}
-              {/* Add an index route for /app */}
-              <Route index element={<Navigate to="dashboard" replace />} />
-            </Route>
+                </AppProvider>
+              </ProtectedRoute>
+            }
+          >
+            {/* Define sub-routes for the protected area if needed */}
+            {/* These will inherit AppProvider from the parent route element */}
+            {/* <Route path="dashboard" element={<Dashboard />} /> */}
+            {/* <Route path="vehicles" element={<Vehicles />} /> */}
+            {/* <Route path="settings" element={<Settings />} /> */}
+            {/* Add an index route for /app */}
+            {/* The element rendered here is AppLayout, which handles page switching */}
+            <Route index element={<Navigate to="/app/dashboard" replace />} /> 
+          </Route>
 
-            {/* Fallback: Redirect to landing or app based on auth state */}
-            {/* Consider adding a dedicated 404 component */}
-            <Route path="*" element={<Navigate to="/" replace />} /> 
-          </Routes>
-        </AuthProvider>
-      </AppProvider>
+          {/* Fallback: Redirect to landing or app based on auth state */}
+          {/* Consider adding a dedicated 404 component */}
+          <Route path="*" element={<Navigate to="/" replace />} /> 
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }

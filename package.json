@@ -12,13 +12,14 @@
     "docker:run": "docker run -p 8080:80 fahrtenbuch",
     "docker:compose": "docker-compose up -d",
     "docker:stop": "docker-compose down",
-    "start": "vite preview --host 0.0.0.0"  
+    "start": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "js-cookie": "^3.0.5",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "js-cookie": "^3.0.5",
     "react-router-dom": "^6.22.3"
   },
   "devDependencies": {

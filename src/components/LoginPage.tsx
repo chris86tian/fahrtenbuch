@@ -1,25 +1,69 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../utils/supabaseClient';
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
-  const navigate = useNavigate(); // Get navigate function
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    const success = await login(email, password);
-    if (success) {
-      // Navigation is handled by the LoginRoute component now
-      // navigate('/app'); // No longer needed here
-    } else {
-      setError('Ungültige Anmeldedaten');
+    try {
+      const success = await login(email, password);
+      if (success) {
+        // Navigation wird durch die LoginRoute-Komponente übernommen
+      } else {
+        setError('Ungültige Anmeldedaten');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!email || !password) {
+      setError('Bitte geben Sie E-Mail und Passwort ein');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      // Für Entwicklungszwecke: Nur die hardcoded E-Mail erlauben
+      if (email !== 'mail@lipalife.de') {
+        setError('Registrierung ist nur mit der E-Mail mail@lipalife.de möglich');
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        setError(error.message);
+      } else if (data) {
+        setError('');
+        alert('Benutzer erstellt! Sie können sich jetzt anmelden.');
+      }
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -70,20 +114,29 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Corrected: Use && instead of &amp;&amp; */}
           {error && (
             <div className="text-red-600 text-sm text-center">{error}</div>
           )}
 
-          <div>
+          <div className="flex flex-col space-y-3">
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               <span className="absolute left-0 inset-y-0 flex items-center pl-3">
                 <LogIn className="h-5 w-5 text-blue-500 group-hover:text-blue-400" />
               </span>
-              Anmelden
+              {loading ? 'Wird angemeldet...' : 'Anmelden'}
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleSignUp}
+              disabled={loading}
+              className="w-full flex justify-center py-2 px-4 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {loading ? 'Wird registriert...' : 'Registrieren'}
             </button>
           </div>
         </form>
@@ -92,4 +145,4 @@ const LoginPage: React.FC = () => {
   );
 };
 
-export default LoginPage
+export default LoginPage;

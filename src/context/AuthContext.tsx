@@ -1,41 +1,85 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import Cookies from 'js-cookie';
+import { supabase } from '../utils/supabaseClient';
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   isAuthenticated: boolean;
+  user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const authToken = Cookies.get('authToken');
-    setIsAuthenticated(!!authToken);
+    // Prüfen, ob der Benutzer bereits angemeldet ist
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+      setUser(session?.user || null);
+      setLoading(false);
+    };
+
+    checkSession();
+
+    // Auf Änderungen des Auth-Status hören
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    // Hardcoded credentials - replace with your actual auth logic if needed
-    if (email === 'mail@lipalife.de' && password === 'lipalife#1001') {
-      Cookies.set('authToken', 'authenticated', { expires: 7 }); // Set cookie for session persistence
-      setIsAuthenticated(true); // Update state
-      return true;
+    try {
+      // Remove the hardcoded check - rely solely on Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        console.error('Anmeldefehler:', error.message);
+        return false; // Login failed
+      }
+
+      // Supabase handles setting the session via onAuthStateChange listener
+      // We just need to return true on successful sign-in
+      return !!data.user; 
+
+    } catch (error) {
+      console.error('Anmeldefehler:', error);
+      return false;
     }
-    return false;
   };
 
-  const logout = () => {
-    Cookies.remove('authToken'); // Remove cookie
-    setIsAuthenticated(false); // Update state
-    // Optionally redirect to login page after logout
-    // window.location.href = '/login'; 
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Abmeldefehler:', error.message);
+      }
+      // State updates are handled by onAuthStateChange
+    } catch (error) {
+      console.error('Abmeldefehler:', error);
+    }
   };
+
+  if (loading) {
+    // Einfacher Ladeindikator während der Sitzungsprüfung
+    return <div>Lädt...</div>;
+  }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

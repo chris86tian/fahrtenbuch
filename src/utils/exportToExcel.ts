@@ -158,6 +158,141 @@ export const createYearlySummary = (trips: Trip[], vehicles: Vehicle[]): string 
   return `${headers}\n${rows.join('\n')}`;
 };
 
+// Function to create tax authority report by year
+export const createTaxAuthorityReport = (trips: Trip[], vehicles: Vehicle[], year: number): string => {
+  // Filter trips for the specified year
+  const yearTrips = trips.filter(trip => {
+    const tripYear = new Date(trip.date).getFullYear();
+    return tripYear === year;
+  });
+  
+  if (yearTrips.length === 0) return '';
+  
+  // Group by vehicle and purpose
+  const vehicleData: Record<string, {
+    licensePlate: string;
+    vehicleInfo: string;
+    initialOdometer: number;
+    finalOdometer: number;
+    business: number;
+    private: number;
+    commute: number;
+    total: number;
+    businessPercentage: number;
+  }> = {};
+  
+  // First pass: collect all data by vehicle
+  yearTrips.forEach(trip => {
+    const vehicle = vehicles.find(v => v.id === trip.vehicleId);
+    if (!vehicle) return;
+    
+    const vehicleKey = vehicle.id;
+    const vehicleInfo = `${vehicle.make} ${vehicle.model} (${vehicle.year})`;
+    
+    if (!vehicleData[vehicleKey]) {
+      vehicleData[vehicleKey] = {
+        licensePlate: vehicle.licensePlate,
+        vehicleInfo: vehicleInfo,
+        initialOdometer: trip.startOdometer,
+        finalOdometer: trip.endOdometer,
+        business: 0,
+        private: 0,
+        commute: 0,
+        total: 0,
+        businessPercentage: 0
+      };
+    }
+    
+    // Update odometer readings (find min/max for the year)
+    vehicleData[vehicleKey].initialOdometer = Math.min(
+      vehicleData[vehicleKey].initialOdometer, 
+      trip.startOdometer
+    );
+    vehicleData[vehicleKey].finalOdometer = Math.max(
+      vehicleData[vehicleKey].finalOdometer, 
+      trip.endOdometer
+    );
+    
+    // Add distances by purpose
+    const distance = trip.endOdometer - trip.startOdometer;
+    vehicleData[vehicleKey][trip.purpose] += distance;
+    vehicleData[vehicleKey].total += distance;
+  });
+  
+  // Second pass: calculate percentages
+  Object.keys(vehicleData).forEach(vehicleKey => {
+    const data = vehicleData[vehicleKey];
+    data.businessPercentage = data.total > 0 
+      ? (data.business / data.total) * 100 
+      : 0;
+  });
+  
+  // Create CSV headers
+  const headers = [
+    'Fahrzeugkennzeichen',
+    'Fahrzeug',
+    'Kilometerstand Jahresanfang',
+    'Kilometerstand Jahresende',
+    'Gesamtkilometer',
+    'Geschäftliche Kilometer',
+    'Private Kilometer',
+    'Arbeitsweg Kilometer',
+    'Geschäftlicher Anteil (%)'
+  ].join(',');
+  
+  // Create CSV rows
+  const rows = Object.values(vehicleData).map(data => {
+    return [
+      escapeCsvValue(data.licensePlate),
+      escapeCsvValue(data.vehicleInfo),
+      data.initialOdometer,
+      data.finalOdometer,
+      data.total.toFixed(1),
+      data.business.toFixed(1),
+      data.private.toFixed(1),
+      data.commute.toFixed(1),
+      data.businessPercentage.toFixed(2)
+    ].join(',');
+  });
+  
+  // Add a summary row for all vehicles combined
+  const totalData = Object.values(vehicleData).reduce(
+    (acc, data) => {
+      acc.total += data.total;
+      acc.business += data.business;
+      acc.private += data.private;
+      acc.commute += data.commute;
+      return acc;
+    },
+    { total: 0, business: 0, private: 0, commute: 0 }
+  );
+  
+  const businessPercentage = totalData.total > 0 
+    ? (totalData.business / totalData.total) * 100 
+    : 0;
+  
+  const summaryRow = [
+    'GESAMT',
+    `Steuerjahr ${year}`,
+    '',
+    '',
+    totalData.total.toFixed(1),
+    totalData.business.toFixed(1),
+    totalData.private.toFixed(1),
+    totalData.commute.toFixed(1),
+    businessPercentage.toFixed(2)
+  ].join(',');
+  
+  // Add title and metadata
+  const title = `Fahrtenbuch-Auswertung für das Finanzamt - Steuerjahr ${year}`;
+  const metadata = [
+    `Erstellt am: ${new Date().toLocaleDateString('de-DE')}`,
+    'Gemäß den Anforderungen des deutschen Steuerrechts'
+  ].join(',');
+  
+  return `${title}\n${metadata}\n\n${headers}\n${rows.join('\n')}\n${summaryRow}`;
+};
+
 // Helper to escape CSV values
 const escapeCsvValue = (value: string): string => {
   if (value === null || value === undefined) return '';
