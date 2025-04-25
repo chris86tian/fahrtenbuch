@@ -6,13 +6,15 @@ import { useAppContext } from '../context/AppContext';
 import { tripsToCSV, createMonthlySummary, createYearlySummary, createTaxAuthorityReport } from '../utils/exportToExcel';
 import { downloadExcel } from '../utils/helpers';
 // Removed updateSupabaseConnection and getCurrentSupabaseConnection imports
-import { Download, Upload, FileText } from 'lucide-react'; // Removed Database icon
+import { Download, Upload, FileText, Trash2 } from 'lucide-react'; // Added Trash2 icon
+import ConfirmDialog from '../components/ConfirmDialog'; // Import ConfirmDialog
 
 const Settings: React.FC = () => {
-  const { trips, vehicles, addTrip } = useAppContext();
+  const { trips, vehicles, addTrip, deleteAllTrips } = useAppContext(); // Added deleteAllTrips
   const [showImportDialog, setShowImportDialog] = useState(false);
   // Removed state for Supabase connection assistant
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false); // State for confirmation dialog
 
   // Get available years from trips
   const availableYears = React.useMemo(() => {
@@ -55,6 +57,15 @@ const Settings: React.FC = () => {
   };
 
   // Removed handleSupabaseConnect function
+
+  const handleDeleteAllTrips = () => {
+    setShowDeleteAllConfirm(true); // Show confirmation dialog
+  };
+
+  const confirmDeleteAllTrips = async () => {
+    await deleteAllTrips(); // Call the delete function
+    setShowDeleteAllConfirm(false); // Close dialog after deletion
+  };
 
   return (
     <div className="space-y-6">
@@ -164,6 +175,27 @@ const Settings: React.FC = () => {
       </div>
 
       <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Datenverwaltung</h2>
+        <p className="text-gray-600 mb-4">
+          Hier können Sie alle Ihre Fahrten löschen. Diese Aktion kann nicht rückgängig gemacht werden.
+        </p>
+        <button
+          onClick={handleDeleteAllTrips}
+          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+          disabled={trips.length === 0}
+        >
+          <Trash2 size={18} className="mr-2" />
+          Alle Fahrten löschen
+        </button>
+         {trips.length === 0 && (
+          <p className="mt-3 text-sm text-gray-500">
+            Es sind keine Fahrten vorhanden, die gelöscht werden könnten.
+          </p>
+        )}
+      </div>
+
+
+      <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Datenschutz</h2>
         <p className="text-gray-600 mb-2">
           Ihre Fahrtenbuchdaten werden sicher in einer Datenbank gespeichert und sind mit Ihrem Benutzerkonto verknüpft.
@@ -178,6 +210,18 @@ const Settings: React.FC = () => {
         onClose={() => setShowImportDialog(false)}
         onImport={handleImportTrips}
         vehicles={vehicles}
+      />
+
+      {/* Delete All Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteAllConfirm}
+        title="Alle Fahrten löschen"
+        message="Sind Sie sicher, dass Sie ALLE Ihre Fahrten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmLabel="Alle Fahrten löschen"
+        cancelLabel="Abbrechen"
+        onConfirm={confirmDeleteAllTrips}
+        onCancel={() => setShowDeleteAllConfirm(false)}
+        type="danger"
       />
 
       {/* Removed SupabaseConnectionAssistant modal */}

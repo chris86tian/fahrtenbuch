@@ -16,6 +16,7 @@ interface AppContextType {
   addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<void>;
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
+  deleteAllTrips: () => Promise<void>; // Added deleteAllTrips to context type
   updateReminderSettings: (settings: ReminderSettings) => void;
   loading: boolean;
 }
@@ -341,6 +342,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // New function to delete all trips for the current user
+  const deleteAllTrips = async () => {
+    if (!isAuthenticated || !user) return;
+    console.log("AppContext: Deleting all trips for user:", user.id);
+    try {
+      // CRITICAL: Use eq('user_id', user.id) to ensure only the current user's trips are deleted
+      const { error } = await supabase
+        .from('trips')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('AppContext: Fehler beim Löschen aller Fahrten:', error);
+        // Optionally: display an error message to the user
+      } else {
+        console.log("AppContext: All trips deleted successfully.");
+        setTrips([]); // Clear local state
+      }
+    } catch (error) {
+      console.error('AppContext: Fehler beim Löschen aller Fahrten (catch block):', error);
+      // Optionally: display an error message to the user
+    }
+  };
+
+
   const updateReminderSettings = (settings: ReminderSettings) => {
     setReminderSettings(settings);
   };
@@ -360,6 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTrip,
         updateTrip,
         deleteTrip,
+        deleteAllTrips, // Provide the new function
         updateReminderSettings,
         loading
       }}
