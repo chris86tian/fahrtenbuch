@@ -18,17 +18,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    // Hardcoded credentials - replace with your actual auth logic if needed
     if (email === 'mail@lipalife.de' && password === 'lipalife#1001') {
-      Cookies.set('authToken', 'authenticated', { expires: 7 });
-      setIsAuthenticated(true);
+      Cookies.set('authToken', 'authenticated', { expires: 7 }); // Set cookie for session persistence
+      setIsAuthenticated(true); // Update state
       return true;
     }
     return false;
   };
 
   const logout = () => {
-    Cookies.remove('authToken');
-    setIsAuthenticated(false);
+    Cookies.remove('authToken'); // Remove cookie
+    setIsAuthenticated(false); // Update state
+    // Optionally redirect to login page after logout
+    // window.location.href = '/login'; 
   };
 
   return (

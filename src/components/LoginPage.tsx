@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogIn } from 'lucide-react';
+import { useNavigate } from 'react-router-dom'; // Import useNavigate
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
+  const navigate = useNavigate(); // Get navigate function
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -13,7 +15,10 @@ const LoginPage: React.FC = () => {
     setError('');
 
     const success = await login(email, password);
-    if (!success) {
+    if (success) {
+      // Navigation is handled by the LoginRoute component now
+      // navigate('/app'); // No longer needed here
+    } else {
       setError('Ungültige Anmeldedaten');
     }
   };
@@ -65,6 +70,7 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Corrected: Use && instead of &amp;&amp; */}
           {error && (
             <div className="text-red-600 text-sm text-center">{error}</div>
           )}
