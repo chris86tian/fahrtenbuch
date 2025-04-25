@@ -13,6 +13,7 @@ export default defineConfig({
   },
   preview: {
     host: true, // Listen on all addresses
-    port: parseInt(process.env.PORT || '3000')
+    port: parseInt(process.env.PORT || '3000'),
+    allowedHosts: ['flottlog.lipahub.de', 'localhost']
   }
 });
