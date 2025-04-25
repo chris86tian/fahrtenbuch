@@ -1,10 +1,10 @@
 import { Trip, Vehicle } from '../types';
 import { generateId } from './helpers';
 
-// Keep the originalEndOdometerValue to store the raw string from the CSV
-interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'endOdometer'> {
+// Keep the original values to store the raw strings from the CSV
+interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'startOdometer' | 'endOdometer'> {
   fahrzeugkennzeichen: string;
-  startOdometer: number | null; // Allow null if parsing fails
+  originalStartOdometerValue: string | null; // Store the raw value from CSV column 6
   originalEndOdometerValue: string | null; // Store the raw value from CSV column 7
 }
 
@@ -18,9 +18,8 @@ export const parseCSV = (csvContent: string): ImportedTrip[] => {
   return dataRows.map(row => {
     const columns = row.split(',').map(col => col.trim().replace(/^"(.*)"$/, '$1'));
 
-    // Attempt to parse start odometer, store null if NaN
-    const parsedStartOdometer = parseInt(columns[6]);
-    const startOdometer = isNaN(parsedStartOdometer) ? null : parsedStartOdometer;
+    // Store the raw value for start odometer (column 6)
+    const originalStartOdometerValue = columns[6] !== undefined ? columns[6] : null;
 
     // Store the raw value for end odometer (column 7)
     const originalEndOdometerValue = columns[7] !== undefined ? columns[7] : null;
@@ -33,7 +32,7 @@ export const parseCSV = (csvContent: string): ImportedTrip[] => {
       startLocation: columns[3],
       endLocation: columns[4],
       purpose: mapPurpose(columns[5]),
-      startOdometer: startOdometer, // Store potentially null value
+      originalStartOdometerValue: originalStartOdometerValue, // Store raw string or null
       originalEndOdometerValue: originalEndOdometerValue, // Store raw string or null
       driverName: columns[9],
       fahrzeugkennzeichen: columns[10], // Parse the license plate, but we won't use it for validation
@@ -84,9 +83,18 @@ export const validateImportedTrips = (
       errors.push(`Zeile ${rowNumber}: Ungültige Zeit (Start: "${trip.startTime}", Ende: "${trip.endTime}")`);
     }
 
-    // Validate start odometer
-    if (trip.startOdometer === null) {
-       errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Start). Erwartet wurde eine Zahl, gefunden wurde "${columns[6]}".`); // Use original column value for error
+    // Validate start odometer (using the raw original value)
+    let startOdometer: number | null = null;
+    if (trip.originalStartOdometerValue === null || trip.originalStartOdometerValue.trim() === '') {
+        errors.push(`Zeile ${rowNumber}: Fehlender Wert für Kilometerstand (Start). Bitte prüfen Sie die 7. Spalte Ihrer CSV-Datei.`);
+    } else {
+        const parsedStartOdometer = parseInt(trip.originalStartOdometerValue);
+        if (isNaN(parsedStartOdometer)) {
+            // Corrected error message to show the actual problematic value
+            errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Start). Erwartet wurde eine Zahl, gefunden wurde "${trip.originalStartOdometerValue}". Bitte prüfen Sie die 7. Spalte Ihrer CSV-Datei.`);
+        } else {
+            startOdometer = parsedStartOdometer; // Store the successfully parsed value
+        }
     }
 
     // Validate end odometer (using the raw original value)
@@ -96,6 +104,7 @@ export const validateImportedTrips = (
     } else {
         const parsedEndOdometer = parseInt(trip.originalEndOdometerValue);
         if (isNaN(parsedEndOdometer)) {
+            // This error message correctly shows the problematic value
             errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Ende). Erwartet wurde eine Zahl, gefunden wurde "${trip.originalEndOdometerValue}". Bitte prüfen Sie die 8. Spalte Ihrer CSV-Datei.`);
         } else {
             endOdometer = parsedEndOdometer; // Store the successfully parsed value
@@ -103,8 +112,8 @@ export const validateImportedTrips = (
     }
 
     // Check odometer order only if both are valid numbers
-    if (trip.startOdometer !== null && endOdometer !== null && endOdometer < trip.startOdometer) {
-       errors.push(`Zeile ${rowNumber}: Kilometerstand Ende (${endOdometer}) muss größer oder gleich Kilometerstand Start (${trip.startOdometer}) sein.`);
+    if (startOdometer !== null && endOdometer !== null && endOdometer < startOdometer) {
+       errors.push(`Zeile ${rowNumber}: Kilometerstand Ende (${endOdometer}) muss größer oder gleich Kilometerstand Start (${startOdometer}) sein.`);
     }
 
     // Validate required fields
@@ -142,20 +151,25 @@ export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[])
 
   return trips.map(trip => {
     // Ignore the fahrzeugkennzeichen from the CSV
-    // Parse endOdometer here, assuming validation passed
-    const { fahrzeugkennzeichen, originalEndOdometerValue, ...tripData } = trip;
-    const endOdometer = parseInt(originalEndOdometerValue!); // Use non-null assertion as validation should catch null/invalid
+    // Parse odometer values here, assuming validation passed
+    const { fahrzeugkennzeichen, originalStartOdometerValue, originalEndOdometerValue, ...tripData } = trip;
 
-    if (tripData.startOdometer === null) {
-        // This case should technically be caught by validation, but handle defensively
-        throw new Error(`Konvertierungsfehler: Start-Kilometerstand ist ungültig für Fahrt am ${tripData.date}`);
+    // Add checks here as a safeguard, although validation should prevent this
+    const startOdometer = parseInt(originalStartOdometerValue!);
+    const endOdometer = parseInt(originalEndOdometerValue!);
+
+    if (isNaN(startOdometer)) {
+        throw new Error(`Konvertierungsfehler: Start-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalStartOdometerValue}"`);
+    }
+    if (isNaN(endOdometer)) {
+        throw new Error(`Konvertierungsfehler: End-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalEndOdometerValue}"`);
     }
 
     return {
       ...tripData,
       id: generateId(),
       vehicleId: targetVehicleId, // Assign the ID of the first vehicle
-      startOdometer: tripData.startOdometer, // Use the potentially null value (validation should prevent null here)
+      startOdometer: startOdometer, // Assign the parsed value
       endOdometer: endOdometer, // Assign the parsed value
     };
   });
