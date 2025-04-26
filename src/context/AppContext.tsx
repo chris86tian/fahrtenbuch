@@ -13,7 +13,8 @@ interface AppContextType {
   updateVehicle: (vehicle: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   setActiveVehicle: (vehicle: Vehicle | null) => void;
-  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>; // Modified to return Promise<Trip | null>
+  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>; // Keep for single inserts
+  addTripsBatch: (trips: Omit<Trip, 'id' | 'user_id'>[]) => Promise<{ data: Trip[] | null; error: any }>; // New function for batch inserts
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
   deleteAllTrips: () => Promise<void>;
@@ -122,7 +123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .from('trips')
           .select('*')
           .eq('user_id', user.id)
-          .range(0, 25000); // <-- Increased the limit here
+          .range(0, 25000); // Increased the limit
 
         if (error) {
           console.error('AppContext: Fehler beim Laden der Fahrten:', error);
@@ -248,13 +249,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Modified addTrip to return the inserted trip or null
+  // Keep addTrip for single inserts (e.g., from the form)
   const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>): Promise<Trip | null> => {
     if (!isAuthenticated || !user) {
       console.warn("AppContext: addTrip called without authenticated user.");
       return null;
     }
-    console.log("AppContext: Attempting to add trip:", trip);
+    console.log("AppContext: Attempting to add single trip:", trip);
     try {
       const { data, error } = await supabase
         .from('trips')
@@ -268,7 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (data && data.length > 0) {
         const newTrip = data[0] as Trip;
-        console.log("AppContext: Trip added successfully:", newTrip);
+        console.log("AppContext: Single trip added successfully:", newTrip);
         // Update local state immediately on success
         setTrips(prev => [...prev, newTrip]);
         
@@ -284,7 +285,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return newTrip; // Return the successfully added trip
       } else {
-         console.warn("AppContext: Add trip returned no data or error.");
+         console.warn("AppContext: Add single trip returned no data or error.");
          return null; // Return null if no data returned
       }
     } catch (error) {
@@ -292,6 +293,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return null; // Return null on unexpected error
     }
   };
+
+  // New function for batch inserts
+  const addTripsBatch = async (trips: Omit<Trip, 'id' | 'user_id'>[]): Promise<{ data: Trip[] | null; error: any }> => {
+    if (!isAuthenticated || !user) {
+      console.warn("AppContext: addTripsBatch called without authenticated user.");
+      return { data: null, error: new Error("User not authenticated") };
+    }
+    if (trips.length === 0) {
+        return { data: [], error: null };
+    }
+
+    console.log(`AppContext: Attempting to add batch of ${trips.length} trips.`);
+    const tripsWithUserId = trips.map(trip => ({ ...trip, user_id: user.id }));
+
+    try {
+      const { data, error } = await supabase
+        .from('trips')
+        .insert(tripsWithUserId)
+        .select(); // Select the inserted data to confirm
+
+      if (error) {
+        console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch):', error);
+        return { data: null, error };
+      }
+
+      if (data && data.length > 0) {
+        console.log(`AppContext: Batch of ${data.length} trips added successfully.`);
+        // Update local state with the newly added trips
+        setTrips(prev => [...prev, ...(data as Trip[])]);
+
+        // Optional: Update vehicle odometer for the latest trip in the batch
+        // This is complex for a batch, might be better to trigger a full reload or recalculation
+        // For simplicity now, we won't update odometer here for batches.
+        // A full data reload after import will update stats and potentially odometer.
+
+        return { data: data as Trip[], error: null };
+      } else {
+         console.warn("AppContext: Add trips batch returned no data or error.");
+         return { data: null, error: new Error("No data returned from batch insert") };
+      }
+    } catch (error) {
+      console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch - catch block):', error);
+      return { data: null, error };
+    }
+  };
+
 
   const updateTrip = async (trip: Trip) => {
     if (!isAuthenticated || !user) return;
@@ -354,6 +401,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isAuthenticated || !user) return;
     console.log("AppContext: Deleting all trips for user:", user.id);
     try {
+      // CRITICAL: Use eq('user_id', user.id) to ensure only the current user's trips are deleted
       const { error } = await supabase
         .from('trips')
         .delete()
@@ -361,12 +409,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('AppContext: Fehler beim Löschen aller Fahrten:', error);
+        // Optionally: display an error message to the user
       } else {
         console.log("AppContext: All trips deleted successfully.");
         setTrips([]); // Clear local state
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Löschen aller Fahrten (catch block):', error);
+      // Optionally: display an error message to the user
     }
   };
 
@@ -387,7 +437,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateVehicle,
         deleteVehicle,
         setActiveVehicle,
-        addTrip, // Provide the modified function
+        addTrip,
+        addTripsBatch, // Provide the new batch function
         updateTrip,
         deleteTrip,
         deleteAllTrips,

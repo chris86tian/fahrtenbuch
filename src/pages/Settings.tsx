@@ -9,11 +9,12 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import { Trip } from '../types'; // Import Trip type
 
 const Settings: React.FC = () => {
-  const { trips, vehicles, addTrip, deleteAllTrips } = useAppContext();
+  const { trips, vehicles, addTrip, addTripsBatch, deleteAllTrips } = useAppContext(); // Added addTripsBatch
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [importFeedback, setImportFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null); // Added 'info' type
+  const [isImporting, setIsImporting] = useState(false); // State to indicate import is in progress
 
   // Get available years from trips
   const availableYears = useMemo(() => {
@@ -49,44 +50,70 @@ const Settings: React.FC = () => {
     downloadExcel(csvData, filename);
   };
 
-  // Modified handleImportTrips to await and count successful imports
+  // Modified handleImportTrips to use batching
   const handleImportTrips = async (importedTrips: Omit<Trip, 'id' | 'user_id'>[]) => {
     setImportFeedback(null); // Clear previous feedback
+    setIsImporting(true); // Set importing state
 
     if (importedTrips.length === 0) {
          setImportFeedback({
             message: `Keine gültigen Fahrten zum Import gefunden.`,
             type: 'info'
         });
+        setIsImporting(false);
         setTimeout(() => setImportFeedback(null), 8000);
         return;
     }
 
-    console.log(`Settings: Attempting to import ${importedTrips.length} trips.`);
+    console.log(`Settings: Attempting to import ${importedTrips.length} trips in batches.`);
 
-    // Create an array of promises for each addTrip call
-    const importPromises = importedTrips.map(trip => addTrip(trip));
+    const batchSize = 500; // Define batch size
+    let successfulImports = 0;
+    let failedImports = 0;
+    const totalTripsToImport = importedTrips.length;
 
-    // Wait for all promises to settle (either fulfill or reject)
-    const results = await Promise.allSettled(importPromises);
+    for (let i = 0; i < totalTripsToImport; i += batchSize) {
+      const batch = importedTrips.slice(i, i + batchSize);
+      console.log(`Settings: Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(totalTripsToImport / batchSize)} with ${batch.length} trips.`);
 
-    // Count successful imports
-    const successfulImports = results.filter(
-      result => result.status === 'fulfilled' && result.value !== null
-    ).length;
+      setImportFeedback({
+          message: `Importiere Batch ${Math.floor(i / batchSize) + 1} von ${Math.ceil(totalTripsToImport / batchSize)}...`,
+          type: 'info'
+      });
 
-    const failedImports = importedTrips.length - successfulImports;
+      const { data, error } = await addTripsBatch(batch); // Use the new batch function
+
+      if (error) {
+        console.error(`Settings: Error importing batch starting at index ${i}:`, error);
+        failedImports += batch.length; // Assume all in batch failed if there's a batch error
+        setImportFeedback({
+            message: `Fehler beim Importieren von Batch ${Math.floor(i / batchSize) + 1}. Bitte prüfen Sie die Konsole.`,
+            type: 'error'
+        });
+        // Optionally break or continue depending on desired behavior on batch failure
+        // For now, we'll continue to try subsequent batches
+      } else if (data) {
+        successfulImports += data.length;
+        console.log(`Settings: Successfully imported ${data.length} trips in batch.`);
+      } else {
+         console.warn(`Settings: Batch starting at index ${i} returned no data or error.`);
+         failedImports += batch.length; // Assume all in batch failed
+      }
+
+      // Add a small delay between batches to prevent overwhelming the server/browser
+      await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+    }
 
     console.log(`Settings: Import finished. Successful: ${successfulImports}, Failed: ${failedImports}`);
 
     if (successfulImports > 0) {
         setImportFeedback({
-            message: `${successfulImports} von ${importedTrips.length} Fahrten erfolgreich importiert.`,
+            message: `${successfulImports} von ${totalTripsToImport} Fahrten erfolgreich importiert.`,
             type: 'success'
         });
     } else if (failedImports > 0) {
          setImportFeedback({
-            message: `Import fehlgeschlagen. ${failedImports} von ${importedTrips.length} Fahrten konnten nicht importiert werden. Bitte prüfen Sie die Konsole für Details.`,
+            message: `Import fehlgeschlagen. ${failedImports} von ${totalTripsToImport} Fahrten konnten nicht importiert werden. Bitte prüfen Sie die Konsole für Details.`,
             type: 'error'
         });
     } else {
@@ -96,6 +123,7 @@ const Settings: React.FC = () => {
         });
     }
 
+    setIsImporting(false); // Reset importing state
     // Optional: Clear feedback message after a few seconds
     setTimeout(() => {
       setImportFeedback(null);
@@ -136,7 +164,8 @@ const Settings: React.FC = () => {
         <div className="space-y-3">
           <button
             onClick={() => setShowImportDialog(true)}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+            disabled={isImporting} // Disable button while importing
           >
             <Upload size={18} className="mr-2" />
             Fahrten importieren
@@ -144,8 +173,8 @@ const Settings: React.FC = () => {
 
           <button
             onClick={handleExportAllTrips}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            disabled={trips.length === 0}
+            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={trips.length === 0 || isImporting} // Disable while importing
           >
             <Download size={18} className="mr-2" />
             Alle Fahrten exportieren
@@ -153,8 +182,8 @@ const Settings: React.FC = () => {
 
           <button
             onClick={handleExportMonthlySummary}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            disabled={trips.length === 0}
+            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            disabled={trips.length === 0 || isImporting} // Disable while importing
           >
             <Download size={18} className="mr-2" />
             Monatszusammenfassung exportieren
@@ -162,8 +191,8 @@ const Settings: React.FC = () => {
 
           <button
             onClick={handleExportYearlySummary}
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-            disabled={trips.length === 0}
+            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
+            disabled={trips.length === 0 || isImporting} // Disable while importing
           >
             <Download size={18} className="mr-2" />
             Jahreszusammenfassung exportieren
@@ -191,7 +220,8 @@ const Settings: React.FC = () => {
             id="tax-year"
             value={selectedYear}
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:opacity-50"
+            disabled={isImporting} // Disable while importing
           >
             {availableYears.length > 0 ? (
               availableYears.map(year => (
@@ -205,8 +235,8 @@ const Settings: React.FC = () => {
 
         <button
           onClick={handleExportTaxReport}
-          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600"
-          disabled={trips.length === 0}
+          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-700 hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-600 disabled:opacity-50"
+          disabled={trips.length === 0 || isImporting} // Disable while importing
         >
           <FileText size={18} className="mr-2" />
           Finanzamtbericht {selectedYear} exportieren
@@ -237,7 +267,7 @@ const Settings: React.FC = () => {
         <button
           onClick={handleDeleteAllTrips}
           className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-          disabled={trips.length === 0}
+          disabled={trips.length === 0 || isImporting} // Disable while importing
         >
           <Trash2 size={18} className="mr-2" />
           Alle Fahrten löschen
@@ -265,13 +295,14 @@ const Settings: React.FC = () => {
         onClose={() => setShowImportDialog(false)}
         onImport={handleImportTrips}
         vehicles={vehicles}
+        isImporting={isImporting} // Pass importing state to dialog
       />
 
       {/* Delete All Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showDeleteAllConfirm}
         title="Alle Fahrten löschen"
-        message="Sind Sie sicher, dass Sie ALLE Ihre Fahrten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+        message="Sind Sie sicher, dass Sie ALLE Ihre Fahrten löchten möchten? Diese Aktion kann nicht rückgängig gemacht werden."
         confirmLabel="Alle Fahrten löschen"
         cancelLabel="Abbrechen"
         onConfirm={confirmDeleteAllTrips}
