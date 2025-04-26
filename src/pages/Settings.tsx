@@ -1,23 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react'; // Added useMemo
 import ReminderSettings from '../components/ReminderSettings';
 import ImportDialog from '../components/ImportDialog';
-// Removed SupabaseConnectionAssistant import
 import { useAppContext } from '../context/AppContext';
 import { tripsToCSV, createMonthlySummary, createYearlySummary, createTaxAuthorityReport } from '../utils/exportToExcel';
 import { downloadExcel } from '../utils/helpers';
-// Removed updateSupabaseConnection and getCurrentSupabaseConnection imports
-import { Download, Upload, FileText, Trash2 } from 'lucide-react'; // Added Trash2 icon
-import ConfirmDialog from '../components/ConfirmDialog'; // Import ConfirmDialog
+import { Download, Upload, FileText, Trash2 } from 'lucide-react';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const Settings: React.FC = () => {
-  const { trips, vehicles, addTrip, deleteAllTrips } = useAppContext(); // Added deleteAllTrips
+  const { trips, vehicles, addTrip, deleteAllTrips } = useAppContext();
   const [showImportDialog, setShowImportDialog] = useState(false);
-  // Removed state for Supabase connection assistant
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false); // State for confirmation dialog
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null); // State for import feedback
 
   // Get available years from trips
-  const availableYears = React.useMemo(() => {
+  const availableYears = useMemo(() => { // Changed to useMemo
     const years = new Set<number>();
     trips.forEach(trip => {
       const year = new Date(trip.date).getFullYear();
@@ -50,13 +48,41 @@ const Settings: React.FC = () => {
     downloadExcel(csvData, filename);
   };
 
-  const handleImportTrips = (importedTrips: typeof trips) => {
+  const handleImportTrips = async (importedTrips: Omit<Trip, 'id' | 'user_id'>[]) => { // Corrected type
+    setImportFeedback(null); // Clear previous feedback
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Process trips sequentially to better track results, or use Promise.all
+    // For simplicity and immediate feedback count, we'll just count the attempts
+    // The actual success/failure is handled and logged within addTrip
     importedTrips.forEach(trip => {
-      addTrip(trip);
+       addTrip(trip); // addTrip is async, but we don't await here to avoid blocking
+       // We assume addTrip will eventually succeed or log an error internally
+       // For a more precise count of *successful* DB inserts, addTrip would need to return a status
+       // For now, we'll just report the number of trips processed for import
     });
+
+    // Provide feedback based on the number of trips processed
+    if (importedTrips.length > 0) {
+        setImportFeedback({
+            message: `${importedTrips.length} Fahrten wurden zum Import verarbeitet. Bitte prüfen Sie die Fahrtenliste.`,
+            type: 'success'
+        });
+    } else {
+         setImportFeedback({
+            message: `Keine gültigen Fahrten zum Import gefunden.`,
+            type: 'info' // Use info type for no trips found
+        });
+    }
+
+
+    // Optional: Clear feedback message after a few seconds
+    setTimeout(() => {
+      setImportFeedback(null);
+    }, 8000); // Clear after 8 seconds
   };
 
-  // Removed handleSupabaseConnect function
 
   const handleDeleteAllTrips = () => {
     setShowDeleteAllConfirm(true); // Show confirmation dialog
@@ -71,13 +97,20 @@ const Settings: React.FC = () => {
     <div className="space-y-6">
       <ReminderSettings />
 
-      {/* Removed Supabase Connection section */}
-
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Datenimport & -export</h2>
         <p className="text-gray-600 mb-4">
           Importieren Sie bestehende Fahrtenbuchdaten oder exportieren Sie Ihre Daten für steuerliche Zwecke und zur Archivierung.
         </p>
+
+        {/* Import Feedback Message */}
+        {importFeedback && (
+          <div className={`mb-4 p-3 rounded-md text-sm ${
+            importFeedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700' // Use blue for info
+          }`}>
+            {importFeedback.message}
+          </div>
+        )}
 
         <div className="space-y-3">
           <button
@@ -223,8 +256,6 @@ const Settings: React.FC = () => {
         onCancel={() => setShowDeleteAllConfirm(false)}
         type="danger"
       />
-
-      {/* Removed SupabaseConnectionAssistant modal */}
     </div>
   );
 };

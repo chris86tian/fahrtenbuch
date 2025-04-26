@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { Trip, Vehicle, TripPurpose } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -10,7 +10,7 @@ interface TripFormProps {
 }
 
 const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel }) => {
-  const { vehicles, trips } = useAppContext();
+  const { vehicles, trips } = useAppContext(); // Get trips from context
 
   const [selectedVehicleId, setSelectedVehicleId] = useState(trip?.vehicleId || vehicleId || '');
   const [date, setDate] = useState(trip?.date || new Date().toISOString().split('T')[0]);
@@ -111,22 +111,28 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
           <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
             Fahrer
           </label>
-          {/* Replaced select with input and datalist */}
-          <input
-            type="text"
+          {/* Replaced input with select for driver selection */}
+          <select
             id="driverName"
-            list="driver-suggestions"
             value={driverName}
             onChange={(e) => setDriverName(e.target.value)}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            placeholder="Fahrer wählen oder eingeben"
             required
-          />
-          <datalist id="driver-suggestions">
+          >
+            <option value="">Fahrer wählen oder eingeben</option>
             {uniqueDrivers.map((driver) => (
-              <option key={driver} value={driver} />
+              <option key={driver} value={driver}>
+                {driver}
+              </option>
             ))}
-          </datalist>
+             {/* Option to allow typing a new driver if needed */}
+             {driverName && !uniqueDrivers.includes(driverName) && (
+                <option value={driverName}>{driverName} (Neu)</option>
+             )}
+          </select>
+           {/* Optional: Add an input field if the user wants to type a new driver */}
+           {/* This would require more complex state management (e.g., a combobox) */}
+           {/* For now, we'll stick to selecting from existing or the current value */}
         </div>
       </div>
 
@@ -161,6 +167,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
       </div>
 
       <div>
+        {/* Removed "(mit Adresse)" */}
         <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
           Startort
         </label>
@@ -175,6 +182,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
       </div>
 
       <div>
+        {/* Removed "(mit Adresse)" */}
         <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
           Zielort
         </label>
