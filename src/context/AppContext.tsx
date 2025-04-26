@@ -121,7 +121,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { data, error } = await supabase
           .from('trips')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .range(0, 25000); // <-- Increased the limit here
 
         if (error) {
           console.error('AppContext: Fehler beim Laden der Fahrten:', error);
