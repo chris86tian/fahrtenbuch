@@ -4,13 +4,15 @@ import { formatDistance } from '../utils/helpers';
 
 interface StatsCardProps {
   stats: DashboardStats;
+  title?: string; // Added optional title prop
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ stats }) => {
+const StatsCard: React.FC<StatsCardProps> = ({ stats, title = 'Fahrtenstatistik' }) => { // Use title prop with default
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       <div className="p-5">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Fahrtenstatistik</h2>
+        {/* Use the title prop */}
+        <h2 className="text-lg font-medium text-gray-900 mb-4">{title}</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-blue-50 p-4 rounded-lg">

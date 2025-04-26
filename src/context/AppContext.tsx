@@ -130,6 +130,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
 
+        console.log("AppContext: Trips loaded count:", data ? data.length : 0); // <-- Added this line
         console.log("AppContext: Trips loaded:", data);
         setTrips(data || []);
       } catch (error) {

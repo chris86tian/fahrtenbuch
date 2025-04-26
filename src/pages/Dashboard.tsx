@@ -99,7 +99,11 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <VehicleSelector />
 
-      {/* Year Selector for Stats and Tax Report */}
+      {/* Overall Stats Card */}
+      {/* Changed title to include "gesamt" */}
+      <StatsCard stats={stats} title="Fahrtenstatistik gesamt" />
+
+      {/* Year Selector for Stats and Tax Report - Moved below overall stats */}
       {availableYears.length > 0 && (
         <div className="bg-white shadow rounded-lg p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">
@@ -121,9 +125,6 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Overall Stats Card */}
-      <StatsCard stats={stats} />
 
       {/* Yearly Stats Card */}
       {yearlyTrips.length > 0 && (
