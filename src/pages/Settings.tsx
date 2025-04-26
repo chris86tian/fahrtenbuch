@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'; // Added useMemo
+import React, { useState, useMemo } from 'react';
 import ReminderSettings from '../components/ReminderSettings';
 import ImportDialog from '../components/ImportDialog';
 import { useAppContext } from '../context/AppContext';
@@ -6,16 +6,17 @@ import { tripsToCSV, createMonthlySummary, createYearlySummary, createTaxAuthori
 import { downloadExcel } from '../utils/helpers';
 import { Download, Upload, FileText, Trash2 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { Trip } from '../types'; // Import Trip type
 
 const Settings: React.FC = () => {
   const { trips, vehicles, addTrip, deleteAllTrips } = useAppContext();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
-  const [importFeedback, setImportFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null); // State for import feedback
+  const [importFeedback, setImportFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null); // Added 'info' type
 
   // Get available years from trips
-  const availableYears = useMemo(() => { // Changed to useMemo
+  const availableYears = useMemo(() => {
     const years = new Set<number>();
     trips.forEach(trip => {
       const year = new Date(trip.date).getFullYear();
@@ -48,34 +49,52 @@ const Settings: React.FC = () => {
     downloadExcel(csvData, filename);
   };
 
-  const handleImportTrips = async (importedTrips: Omit<Trip, 'id' | 'user_id'>[]) => { // Corrected type
+  // Modified handleImportTrips to await and count successful imports
+  const handleImportTrips = async (importedTrips: Omit<Trip, 'id' | 'user_id'>[]) => {
     setImportFeedback(null); // Clear previous feedback
-    let successCount = 0;
-    let errorCount = 0;
 
-    // Process trips sequentially to better track results, or use Promise.all
-    // For simplicity and immediate feedback count, we'll just count the attempts
-    // The actual success/failure is handled and logged within addTrip
-    importedTrips.forEach(trip => {
-       addTrip(trip); // addTrip is async, but we don't await here to avoid blocking
-       // We assume addTrip will eventually succeed or log an error internally
-       // For a more precise count of *successful* DB inserts, addTrip would need to return a status
-       // For now, we'll just report the number of trips processed for import
-    });
+    if (importedTrips.length === 0) {
+         setImportFeedback({
+            message: `Keine gültigen Fahrten zum Import gefunden.`,
+            type: 'info'
+        });
+        setTimeout(() => setImportFeedback(null), 8000);
+        return;
+    }
 
-    // Provide feedback based on the number of trips processed
-    if (importedTrips.length > 0) {
+    console.log(`Settings: Attempting to import ${importedTrips.length} trips.`);
+
+    // Create an array of promises for each addTrip call
+    const importPromises = importedTrips.map(trip => addTrip(trip));
+
+    // Wait for all promises to settle (either fulfill or reject)
+    const results = await Promise.allSettled(importPromises);
+
+    // Count successful imports
+    const successfulImports = results.filter(
+      result => result.status === 'fulfilled' && result.value !== null
+    ).length;
+
+    const failedImports = importedTrips.length - successfulImports;
+
+    console.log(`Settings: Import finished. Successful: ${successfulImports}, Failed: ${failedImports}`);
+
+    if (successfulImports > 0) {
         setImportFeedback({
-            message: `${importedTrips.length} Fahrten wurden zum Import verarbeitet. Bitte prüfen Sie die Fahrtenliste.`,
+            message: `${successfulImports} von ${importedTrips.length} Fahrten erfolgreich importiert.`,
             type: 'success'
+        });
+    } else if (failedImports > 0) {
+         setImportFeedback({
+            message: `Import fehlgeschlagen. ${failedImports} von ${importedTrips.length} Fahrten konnten nicht importiert werden. Bitte prüfen Sie die Konsole für Details.`,
+            type: 'error'
         });
     } else {
          setImportFeedback({
-            message: `Keine gültigen Fahrten zum Import gefunden.`,
-            type: 'info' // Use info type for no trips found
+            message: `Keine Fahrten zum Import gefunden oder verarbeitet.`,
+            type: 'info'
         });
     }
-
 
     // Optional: Clear feedback message after a few seconds
     setTimeout(() => {
@@ -106,7 +125,9 @@ const Settings: React.FC = () => {
         {/* Import Feedback Message */}
         {importFeedback && (
           <div className={`mb-4 p-3 rounded-md text-sm ${
-            importFeedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700' // Use blue for info
+            importFeedback.type === 'success' ? 'bg-green-50 text-green-700' :
+            importFeedback.type === 'error' ? 'bg-red-50 text-red-700' :
+            'bg-blue-50 text-blue-700' // Default to blue for info
           }`}>
             {importFeedback.message}
           </div>
@@ -203,6 +224,7 @@ const Settings: React.FC = () => {
             Der Finanzamtbericht enthält alle relevanten Informationen für Ihre Steuererklärung, einschließlich der
             Gesamtkilometer, geschäftlichen Kilometer und des geschäftlichen Anteils in Prozent. Diese Daten können
             Sie für die Berechnung der steuerlich absetzbaren Fahrzeugkosten verwenden.
+            Bewahren Sie diesen Bericht zusammen mit den detaillierten Fahrtenbucheinträgen als Nachweis für das Finanzamt auf.
           </p>
         </div>
       </div>

@@ -13,10 +13,10 @@ interface AppContextType {
   updateVehicle: (vehicle: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   setActiveVehicle: (vehicle: Vehicle | null) => void;
-  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<void>;
+  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>; // Modified to return Promise<Trip | null>
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
-  deleteAllTrips: () => Promise<void>; // Added deleteAllTrips to context type
+  deleteAllTrips: () => Promise<void>;
   updateReminderSettings: (settings: ReminderSettings) => void;
   loading: boolean;
 }
@@ -248,9 +248,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Adding trip:", trip);
+  // Modified addTrip to return the inserted trip or null
+  const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>): Promise<Trip | null> => {
+    if (!isAuthenticated || !user) {
+      console.warn("AppContext: addTrip called without authenticated user.");
+      return null;
+    }
+    console.log("AppContext: Attempting to add trip:", trip);
     try {
       const { data, error } = await supabase
         .from('trips')
@@ -259,13 +263,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('AppContext: Fehler beim Hinzufügen der Fahrt:', error);
-        // Optionally: throw error or display a message to the user
-        return; // Stop execution if there's an error
+        return null; // Return null on Supabase error
       }
 
       if (data && data.length > 0) {
         const newTrip = data[0] as Trip;
         console.log("AppContext: Trip added successfully:", newTrip);
+        // Update local state immediately on success
         setTrips(prev => [...prev, newTrip]);
         
         // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs
@@ -278,11 +282,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         }
+        return newTrip; // Return the successfully added trip
       } else {
          console.warn("AppContext: Add trip returned no data or error.");
+         return null; // Return null if no data returned
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Hinzufügen der Fahrt (catch block):', error);
+      return null; // Return null on unexpected error
     }
   };
 
@@ -343,12 +350,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // New function to delete all trips for the current user
   const deleteAllTrips = async () => {
     if (!isAuthenticated || !user) return;
     console.log("AppContext: Deleting all trips for user:", user.id);
     try {
-      // CRITICAL: Use eq('user_id', user.id) to ensure only the current user's trips are deleted
       const { error } = await supabase
         .from('trips')
         .delete()
@@ -356,14 +361,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('AppContext: Fehler beim Löschen aller Fahrten:', error);
-        // Optionally: display an error message to the user
       } else {
         console.log("AppContext: All trips deleted successfully.");
         setTrips([]); // Clear local state
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Löschen aller Fahrten (catch block):', error);
-      // Optionally: display an error message to the user
     }
   };
 
@@ -384,10 +387,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateVehicle,
         deleteVehicle,
         setActiveVehicle,
-        addTrip,
+        addTrip, // Provide the modified function
         updateTrip,
         deleteTrip,
-        deleteAllTrips, // Provide the new function
+        deleteAllTrips,
         updateReminderSettings,
         loading
       }}
