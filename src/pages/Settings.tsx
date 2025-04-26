@@ -7,6 +7,7 @@ import { downloadExcel } from '../utils/helpers';
 import { Download, Upload, FileText, Trash2 } from 'lucide-react';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { Trip } from '../types'; // Import Trip type
+import FahrtenbuchCheckSection from '../components/FahrtenbuchCheckSection'; // Import the new component
 
 const Settings: React.FC = () => {
   const { trips, vehicles, addTrip, addTripsBatch, deleteAllTrips } = useAppContext(); // Added addTripsBatch
@@ -96,7 +97,7 @@ const Settings: React.FC = () => {
         successfulImports += data.length;
         console.log(`Settings: Successfully imported ${data.length} trips in batch.`);
       } else {
-         console.warn(`Settings: Batch starting at index ${i} returned no data or error.`);
+         console.warn("Settings: Add trips batch returned no data or error.");
          failedImports += batch.length; // Assume all in batch failed
       }
 
@@ -143,6 +144,9 @@ const Settings: React.FC = () => {
   return (
     <div className="space-y-6">
       <ReminderSettings />
+
+      {/* Add the new FahrtenbuchCheckSection component */}
+      <FahrtenbuchCheckSection />
 
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Datenimport & -export</h2>
