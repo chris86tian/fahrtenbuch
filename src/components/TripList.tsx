@@ -43,8 +43,10 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
         : b[sortField] - a[sortField];
     }
     
-    const valueA = String(a[sortField]).toLowerCase();
-    const valueB = String(b[sortField]).toLowerCase();
+    // Handle potential null/undefined notes for sorting
+    const valueA = String(a[sortField] ?? '').toLowerCase();
+    const valueB = String(b[sortField] ?? '').toLowerCase();
+    
     return sortDirection === 'asc'
       ? valueA.localeCompare(valueB)
       : valueB.localeCompare(valueA);
@@ -80,6 +82,13 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
             >
               Zweck {sortField === 'purpose' && (sortDirection === 'asc' ? '↑' : '↓')}
             </th>
+             <th
+              scope="col"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+              onClick={() => handleSort('notes')}
+            >
+              Notizen {sortField === 'notes' && (sortDirection === 'asc' ? '↑' : '↓')}
+            </th>
             <th
               scope="col"
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
@@ -114,6 +123,9 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   {purposeMap[trip.purpose] || trip.purpose}
+                </td>
+                 <td className="px-6 py-4 text-sm text-gray-900 max-w-xs overflow-hidden text-ellipsis">
+                  {trip.notes || '-'} {/* Display notes or '-' if empty */}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                   <div className="font-medium">{formatDistance(distance)}</div>

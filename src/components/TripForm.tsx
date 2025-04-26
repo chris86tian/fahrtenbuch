@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; // Added useMemo
+import React, { useState, useEffect, useMemo } from 'react';
 import { Trip, Vehicle, TripPurpose } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -71,207 +71,206 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
-          Fahrzeug
-        </label>
-        <select
-          id="vehicleId"
-          value={selectedVehicleId}
-          onChange={(e) => setSelectedVehicleId(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          required
-        >
-          <option value="">Fahrzeug wählen</option>
-          {vehicles.map((vehicle) => (
-            <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
-            </option>
-          ))}
-        </select>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-4 flex flex-col h-full"> {/* Added flex and h-full */}
+      {/* Scrollable content area */}
+      <div className="overflow-y-auto pr-2 flex-1"> {/* Added overflow-y-auto, pr-2 for scrollbar space, flex-1 */}
+        <div className="space-y-4"> {/* Wrapped form fields in a div */}
+          <div>
+            <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
+              Fahrzeug
+            </label>
+            <select
+              id="vehicleId"
+              value={selectedVehicleId}
+              onChange={(e) => setSelectedVehicleId(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              required
+            >
+              <option value="">Fahrzeug wählen</option>
+              {vehicles.map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>
+                  {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-            Datum
-          </label>
-          <input
-            type="date"
-            id="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            required
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+                Datum
+              </label>
+              <input
+                type="date"
+                id="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
+                Fahrer
+              </label>
+              <select
+                id="driverName"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="">Fahrer wählen oder eingeben</option>
+                {uniqueDrivers.map((driver) => (
+                  <option key={driver} value={driver}>
+                    {driver}
+                  </option>
+                ))}
+                 {driverName && !uniqueDrivers.includes(driverName) && (
+                    <option value={driverName}>{driverName} (Neu)</option>
+                 )}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
+                Startzeit
+              </label>
+              <input
+                type="time"
+                id="startTime"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
+                Endzeit
+              </label>
+              <input
+                type="time"
+                id="endTime"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
+              Startort
+            </label>
+            <input
+              type="text"
+              id="startLocation"
+              value={startLocation}
+              onChange={(e) => setStartLocation(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
+              Zielort
+            </label>
+            <input
+              type="text"
+              id="endLocation"
+              value={endLocation}
+              onChange={(e) => setEndLocation(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
+              Zweck
+            </label>
+            <select
+              id="purpose"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value as TripPurpose)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              required
+            >
+              <option value="business">Geschäftlich</option>
+              <option value="private">Privat</option>
+              <option value="commute">Arbeitsweg</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="startOdometer" className="block text-sm font-medium text-gray-700">
+                Kilometerstand Start
+              </label>
+              <input
+                type="number"
+                id="startOdometer"
+                value={startOdometer}
+                onChange={(e) => setStartOdometer(parseInt(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                min="0"
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="endOdometer" className="block text-sm font-medium text-gray-700">
+                Kilometerstand Ende
+              </label>
+              <input
+                type="number"
+                id="endOdometer"
+                value={endOdometer}
+                onChange={(e) => setEndOdometer(parseInt(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                min={startOdometer}
+                required
+              />
+            </div>
+
+            <div>
+              <label htmlFor="distance" className="block text-sm font-medium text-gray-700">
+                Distanz (km)
+              </label>
+              <input
+                type="number"
+                id="distance"
+                value={distance}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 p-2 border"
+                readOnly
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+              Notizen
+            </label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              rows={3}
+            />
+          </div>
         </div>
-
-        <div>
-          <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
-            Fahrer
-          </label>
-          {/* Replaced input with select for driver selection */}
-          <select
-            id="driverName"
-            value={driverName}
-            onChange={(e) => setDriverName(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            required
-          >
-            <option value="">Fahrer wählen oder eingeben</option>
-            {uniqueDrivers.map((driver) => (
-              <option key={driver} value={driver}>
-                {driver}
-              </option>
-            ))}
-             {/* Option to allow typing a new driver if needed */}
-             {driverName && !uniqueDrivers.includes(driverName) && (
-                <option value={driverName}>{driverName} (Neu)</option>
-             )}
-          </select>
-           {/* Optional: Add an input field if the user wants to type a new driver */}
-           {/* This would require more complex state management (e.g., a combobox) */}
-           {/* For now, we'll stick to selecting from existing or the current value */}
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
-            Startzeit
-          </label>
-          <input
-            type="time"
-            id="startTime"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
-            Endzeit
-          </label>
-          <input
-            type="time"
-            id="endTime"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            required
-          />
-        </div>
-      </div>
-
-      <div>
-        {/* Removed "(mit Adresse)" */}
-        <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
-          Startort
-        </label>
-        <input
-          type="text"
-          id="startLocation"
-          value={startLocation}
-          onChange={(e) => setStartLocation(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          required
-        />
-      </div>
-
-      <div>
-        {/* Removed "(mit Adresse)" */}
-        <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
-          Zielort
-        </label>
-        <input
-          type="text"
-          id="endLocation"
-          value={endLocation}
-          onChange={(e) => setEndLocation(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          required
-        />
-      </div>
-
-      <div>
-        <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
-          Zweck
-        </label>
-        <select
-          id="purpose"
-          value={purpose}
-          onChange={(e) => setPurpose(e.target.value as TripPurpose)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          required
-        >
-          <option value="business">Geschäftlich</option>
-          <option value="private">Privat</option>
-          <option value="commute">Arbeitsweg</option>
-        </select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label htmlFor="startOdometer" className="block text-sm font-medium text-gray-700">
-            Kilometerstand Start
-          </label>
-          <input
-            type="number"
-            id="startOdometer"
-            value={startOdometer}
-            onChange={(e) => setStartOdometer(parseInt(e.target.value))}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            min="0"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="endOdometer" className="block text-sm font-medium text-gray-700">
-            Kilometerstand Ende
-          </label>
-          <input
-            type="number"
-            id="endOdometer"
-            value={endOdometer}
-            onChange={(e) => setEndOdometer(parseInt(e.target.value))}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            min={startOdometer}
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="distance" className="block text-sm font-medium text-gray-700">
-            Distanz (km)
-          </label>
-          <input
-            type="number"
-            id="distance"
-            value={distance}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 p-2 border"
-            readOnly
-          />
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-          Notizen
-        </label>
-        <textarea
-          id="notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          rows={3}
-        />
-      </div>
-
-      <div className="flex justify-end space-x-3">
+      {/* Fixed button area */}
+      <div className="flex justify-end space-x-3 pt-4 bg-white"> {/* Added pt-4 and bg-white */}
         <button
           type="button"
           onClick={onCancel}
