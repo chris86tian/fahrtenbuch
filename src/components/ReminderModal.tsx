@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface ReminderModalProps {
   isOpen: boolean;
@@ -7,7 +8,15 @@ interface ReminderModalProps {
 }
 
 const ReminderModal: React.FC<ReminderModalProps> = ({ isOpen, onClose, onAddTrip }) => {
+  const navigate = useNavigate();
+  
   if (!isOpen) return null;
+
+  const handleAddTrip = () => {
+    // Navigate to the record-trip page
+    navigate('/app/record-trip');
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -28,10 +37,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ isOpen, onClose, onAddTri
             Später erinnern
           </button>
           <button
-            onClick={() => {
-              onAddTrip();
-              onClose();
-            }}
+            onClick={handleAddTrip}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white transition-colors"
           >
             Fahrt hinzufügen

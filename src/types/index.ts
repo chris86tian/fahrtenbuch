@@ -45,3 +45,6 @@ export type DashboardStats = {
   privateDistance: number;
   commuteDistance: number;
 };
+
+// Added new page type
+export type AppPages = 'dashboard' | 'vehicles' | 'settings' | 'record-trip' | 'trips';

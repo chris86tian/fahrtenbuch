@@ -118,20 +118,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       try {
         setLoading(true);
-        console.log("AppContext: Loading trips for user:", user.id);
+        console.log("AppContext: Loading all trips for user:", user.id);
+        
+        // Fetch all trips without ordering or limiting to get all data
         const { data, error } = await supabase
           .from('trips')
           .select('*')
-          .eq('user_id', user.id)
-          .range(0, 25000); // Increased the limit
+          .eq('user_id', user.id);
 
         if (error) {
           console.error('AppContext: Fehler beim Laden der Fahrten:', error);
           return;
         }
 
-        console.log("AppContext: Trips loaded count:", data ? data.length : 0); // <-- Added this line
-        console.log("AppContext: Trips loaded:", data);
+        console.log(`AppContext: Total trips loaded count: ${data ? data.length : 0}`);
+        
+        // Debug: Check for 2022 trips specifically in the loaded data
+        const trips2022 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2022) : [];
+        console.log(`AppContext: Found ${trips2022.length} trips from 2022 in loaded data.`);
+        if (trips2022.length > 0) {
+          console.log("AppContext: Sample 2022 trip:", trips2022[0]);
+        } else {
+           console.log("AppContext: No trips found for 2022 in the data loaded from Supabase.");
+        }
+
+        // Debug: Check for 2023 trips specifically in the loaded data
+        const trips2023 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2023) : [];
+        console.log(`AppContext: Found ${trips2023.length} trips from 2023 in loaded data.`);
+        if (trips2023.length > 0) {
+          console.log("AppContext: Sample 2023 trip:", trips2023[0]);
+        } else {
+           console.log("AppContext: No trips found for 2023 in the data loaded from Supabase.");
+        }
+        
+        // Debug: Check for 2025 trips specifically in the loaded data
+        const trips2025 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2025) : [];
+        console.log(`AppContext: Found ${trips2025.length} trips from 2025 in loaded data.`);
+        if (trips2025.length > 0) {
+          console.log("AppContext: Sample 2025 trip:", trips2025[0]);
+        } else {
+           console.log("AppContext: No trips found for 2025 in the data loaded from Supabase.");
+        }
+        
         setTrips(data || []);
       } catch (error) {
         console.error('AppContext: Fehler beim Laden der Fahrten:', error);
@@ -334,6 +362,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
          console.warn("AppContext: Add trips batch returned no data or error.");
          return { data: null, error: new Error("No data returned from batch insert") };
       }
+      // Note: Supabase batch insert might have its own limits.
+      // If you have extremely large imports, you might need to break them into smaller batches manually.
     } catch (error) {
       console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch - catch block):', error);
       return { data: null, error };

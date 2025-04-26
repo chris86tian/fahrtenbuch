@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Car, BarChart2, Settings as SettingsIcon, Menu, X, LogOut, PlusCircle } from 'lucide-react'; // Added PlusCircle
+import { Car, BarChart2, Settings as SettingsIcon, Menu, X, LogOut, PlusCircle, List } from 'lucide-react'; // Added List icon
 import { useAuth } from '../context/AuthContext';
+import { AppPages } from '../types'; // Import AppPages type
 
 interface LayoutProps {
   children: React.ReactNode;
-  activePage: 'dashboard' | 'vehicles' | 'settings' | 'record-trip'; // Added 'record-trip'
-  onNavigate: (page: 'dashboard' | 'vehicles' | 'settings' | 'record-trip') => void; // Added 'record-trip'
+  activePage: AppPages; // Use AppPages type
+  onNavigate: (page: AppPages) => void; // Use AppPages type
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => {
@@ -31,7 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
   }: {
     icon: React.ReactNode;
     label: string;
-    page: 'dashboard' | 'vehicles' | 'settings' | 'record-trip'; // Added 'record-trip'
+    page: AppPages; // Use AppPages type
   }) => {
     const isActive = activePage === page;
 
@@ -84,6 +85,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
               label="Neue Fahrt erfassen"
               page="record-trip"
             />
+            {/* New NavItem for Trips List */}
+            <NavItem
+              icon={<List size={20} />}
+              label="Fahrten"
+              page="trips"
+            />
             <NavItem
               icon={<BarChart2 size={20} />}
               label="Dashboard"
@@ -130,7 +137,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activePage, onNavigate }) => 
               {activePage === 'dashboard' && 'Dashboard'}
               {activePage === 'vehicles' && 'Fahrzeuge'}
               {activePage === 'settings' && 'Einstellungen'}
-              {activePage === 'record-trip' && 'Neue Fahrt erfassen'} {/* Added mobile header text */}
+              {activePage === 'record-trip' && 'Neue Fahrt erfassen'}
+              {activePage === 'trips' && 'Fahrten'} {/* Added mobile header text for Trips */}
             </h1>
             <div className="lg:hidden">
               {/* Placeholder for header right content on mobile */}

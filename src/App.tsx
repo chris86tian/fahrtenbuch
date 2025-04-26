@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
@@ -8,9 +8,11 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Settings from './pages/Settings';
-import RecordTrip from './pages/RecordTrip'; // Import the new page
+import RecordTrip from './pages/RecordTrip';
+import Trips from './pages/Trips'; // Import the new Trips page
 import LoadingIndicator from './components/LoadingIndicator';
 import './index.css';
+import { AppPages } from './types'; // Import AppPages type
 
 // ProtectedRoute remains the same: Checks auth and redirects if needed
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -25,15 +27,38 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Component to handle the main application layout and page switching
 const AppLayout: React.FC = () => {
-  // Added 'record-trip' to the state type
-  const [activePage, setActivePage] = useState<'dashboard' | 'vehicles' | 'settings' | 'record-trip'>('dashboard');
+  // Use AppPages type for state
+  const [activePage, setActivePage] = useState<AppPages>('dashboard');
+  const navigate = useNavigate();
+
+  // Use effect to update activePage based on route changes
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/app/dashboard')) setActivePage('dashboard');
+    else if (path.startsWith('/app/vehicles')) setActivePage('vehicles');
+    else if (path.startsWith('/app/settings')) setActivePage('settings');
+    else if (path.startsWith('/app/record-trip')) setActivePage('record-trip');
+    else if (path.startsWith('/app/trips')) setActivePage('trips'); // Handle new trips page
+    else setActivePage('dashboard'); // Default
+  }, [window.location.pathname]); // Update when pathname changes
+
+  // Function to navigate and update activePage state
+  const handleNavigate = (page: AppPages) => {
+    setActivePage(page);
+    navigate(`/app/${page}`); // Use navigate to change the URL
+  };
 
   return (
-    <Layout activePage={activePage} onNavigate={setActivePage}>
-      {activePage === 'dashboard' && <Dashboard />}
-      {activePage === 'vehicles' && <Vehicles />}
-      {activePage === 'settings' && <Settings />}
-      {activePage === 'record-trip' && <RecordTrip />} {/* Added conditional render */}
+    <Layout activePage={activePage} onNavigate={handleNavigate}>
+      <Routes>
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="vehicles" element={<Vehicles />} />
+        <Route path="settings" element={<Settings />} />
+        <Route path="record-trip" element={<RecordTrip />} />
+        <Route path="trips" element={<Trips />} />
+        {/* Redirect /app to /app/dashboard by default */}
+        <Route index element={<Navigate to="dashboard" replace />} />
+      </Routes>
     </Layout>
   );
 };
@@ -94,15 +119,7 @@ function App() {
                 </AppProvider>
               </ProtectedRoute>
             }
-          >
-             {/* Added nested route for the new page */}
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="vehicles" element={<Vehicles />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="record-trip" element={<RecordTrip />} />
-            {/* Redirect /app to /app/dashboard by default */}
-            <Route index element={<Navigate to="dashboard" replace />} />
-          </Route>
+          />
 
           {/* Fallback: Redirect to landing or app based on auth state */}
           <Route path="*" element={<Navigate to="/" replace />} />
