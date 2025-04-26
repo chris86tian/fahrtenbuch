@@ -71,30 +71,50 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 flex flex-col h-full"> {/* Added flex and h-full */}
+    <form onSubmit={handleSubmit} className="space-y-4 flex flex-col h-full">
       {/* Scrollable content area */}
-      <div className="overflow-y-auto pr-2 flex-1"> {/* Added overflow-y-auto, pr-2 for scrollbar space, flex-1 */}
-        <div className="space-y-4"> {/* Wrapped form fields in a div */}
-          <div>
-            <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
-              Fahrzeug
-            </label>
-            <select
-              id="vehicleId"
-              value={selectedVehicleId}
-              onChange={(e) => setSelectedVehicleId(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-              required
-            >
-              <option value="">Fahrzeug wählen</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
-                </option>
-              ))}
-            </select>
+      <div className="overflow-y-auto pr-2 flex-1">
+        <div className="space-y-4">
+          {/* Fahrzeug and Zweck side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
+                Fahrzeug
+              </label>
+              <select
+                id="vehicleId"
+                value={selectedVehicleId}
+                onChange={(e) => setSelectedVehicleId(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="">Fahrzeug wählen</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
+                Zweck
+              </label>
+              <select
+                id="purpose"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value as TripPurpose)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="business">Geschäftlich</option>
+                <option value="private">Privat</option>
+                <option value="commute">Arbeitsweg</option>
+              </select>
+            </div>
           </div>
 
+          {/* Datum and Fahrer side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="date" className="block text-sm font-medium text-gray-700">
@@ -109,7 +129,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 required
               />
             </div>
-
             <div>
               <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
                 Fahrer
@@ -134,6 +153,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
             </div>
           </div>
 
+          {/* Startzeit and Endzeit side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
@@ -148,7 +168,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 required
               />
             </div>
-
             <div>
               <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
                 Endzeit
@@ -164,51 +183,37 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
             </div>
           </div>
 
-          <div>
-            <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
-              Startort
-            </label>
-            <input
-              type="text"
-              id="startLocation"
-              value={startLocation}
-              onChange={(e) => setStartLocation(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-              required
-            />
+          {/* Startort and Zielort side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
+                Startort
+              </label>
+              <input
+                type="text"
+                id="startLocation"
+                value={startLocation}
+                onChange={(e) => setStartLocation(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
+                Zielort
+              </label>
+              <input
+                type="text"
+                id="endLocation"
+                value={endLocation}
+                onChange={(e) => setEndLocation(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
-              Zielort
-            </label>
-            <input
-              type="text"
-              id="endLocation"
-              value={endLocation}
-              onChange={(e) => setEndLocation(e.target.value)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
-              Zweck
-            </label>
-            <select
-              id="purpose"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value as TripPurpose)}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-              required
-            >
-              <option value="business">Geschäftlich</option>
-              <option value="private">Privat</option>
-              <option value="commute">Arbeitsweg</option>
-            </select>
-          </div>
-
+          {/* Kilometerstand Start, Ende, and Distanz side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label htmlFor="startOdometer" className="block text-sm font-medium text-gray-700">
@@ -224,7 +229,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 required
               />
             </div>
-
             <div>
               <label htmlFor="endOdometer" className="block text-sm font-medium text-gray-700">
                 Kilometerstand Ende
@@ -239,7 +243,6 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 required
               />
             </div>
-
             <div>
               <label htmlFor="distance" className="block text-sm font-medium text-gray-700">
                 Distanz (km)
@@ -254,6 +257,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
             </div>
           </div>
 
+          {/* Notizen */}
           <div>
             <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
               Notizen
@@ -270,7 +274,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
       </div>
 
       {/* Fixed button area */}
-      <div className="flex justify-end space-x-3 pt-4 bg-white"> {/* Added pt-4 and bg-white */}
+      <div className="flex justify-end space-x-3 pt-4 bg-white">
         <button
           type="button"
           onClick={onCancel}
