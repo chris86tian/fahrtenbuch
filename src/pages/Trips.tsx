@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import TripList from '../components/TripList';
 import TripForm from '../components/TripForm';
 import ConfirmDialog from '../components/ConfirmDialog';
+import SplitTripDialog from '../components/SplitTripDialog'; // Import the new dialog
 import { PlusCircle } from 'lucide-react';
 
 const Trips: React.FC = () => {
@@ -16,6 +17,10 @@ const Trips: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [filterText, setFilterText] = useState<string>('');
 
+  const [showSplitDialog, setShowSplitDialog] = useState(false); // State for split dialog visibility
+  const [tripToSplit, setTripToSplit] = useState<Trip | null>(null); // State for the trip being split
+
+
   // Get available years from trips
   const availableYears = useMemo(() => {
     // First, collect all years from actual trips
@@ -24,15 +29,15 @@ const Trips: React.FC = () => {
       const year = new Date(trip.date).getFullYear();
       yearsFromTrips.add(year);
     });
-    
+
     // Always include current year
     const currentYear = new Date().getFullYear();
     yearsFromTrips.add(currentYear);
-    
+
     // Add specific years we want to always include (2022, 2023, 2024, 2025)
     const requiredYears = [2022, 2023, 2024, 2025];
     requiredYears.forEach(year => yearsFromTrips.add(year));
-    
+
     return Array.from(yearsFromTrips).sort((a, b) => b - a); // Sort descending
   }, [trips]);
 
@@ -92,12 +97,63 @@ const Trips: React.FC = () => {
     }
   };
 
+  // Handler for duplicating/splitting a trip
+  const handleDuplicateTrip = (trip: Trip) => {
+    setTripToSplit(trip);
+    setShowSplitDialog(true);
+  };
+
+  // Handler for splitting the trip from the dialog
+  const handleSplitTrip = async (originalTrip: Trip, intermediateLocation: string, intermediateTime: string, intermediateOdometer: number) => {
+    // Create the first leg (Start to Intermediate)
+    const firstLeg: Omit<Trip, 'id' | 'user_id'> = {
+      vehicleId: originalTrip.vehicleId,
+      date: originalTrip.date,
+      startTime: originalTrip.startTime,
+      endTime: intermediateTime,
+      startLocation: originalTrip.startLocation,
+      endLocation: intermediateLocation,
+      purpose: originalTrip.purpose, // Keep original purpose for both legs
+      startOdometer: originalTrip.startOdometer,
+      endOdometer: intermediateOdometer,
+      driverName: originalTrip.driverName,
+      notes: originalTrip.notes ? `(Teil 1) ${originalTrip.notes}` : '(Teil 1)',
+    };
+
+    // Create the second leg (Intermediate to End)
+    const secondLeg: Omit<Trip, 'id' | 'user_id'> = {
+      vehicleId: originalTrip.vehicleId,
+      date: originalTrip.date, // Assume same day
+      startTime: intermediateTime,
+      endTime: originalTrip.endTime,
+      startLocation: intermediateLocation,
+      endLocation: originalTrip.endLocation,
+      purpose: originalTrip.purpose, // Keep original purpose for both legs
+      startOdometer: intermediateOdometer,
+      endOdometer: originalTrip.endOdometer,
+      driverName: originalTrip.driverName,
+      notes: originalTrip.notes ? `(Teil 2) ${originalTrip.notes}` : '(Teil 2)',
+    };
+
+    // Add the two new trips
+    await addTrip(firstLeg);
+    await addTrip(secondLeg);
+
+    // Delete the original trip
+    await deleteTrip(originalTrip.id);
+
+    // Close the dialog
+    setShowSplitDialog(false);
+    setTripToSplit(null);
+  };
+
+
   // Debug output to check trips and years
   console.log("All trips:", trips.length);
   console.log("Available years:", availableYears);
   console.log("Selected year:", selectedYear);
   console.log("Filtered trips:", filteredTrips.length);
-  
+
   // Check for trips by year
   const years = [2022, 2023, 2024, 2025];
   years.forEach(year => {
@@ -157,6 +213,7 @@ const Trips: React.FC = () => {
             vehicles={vehicles}
             onEdit={handleEditTrip}
             onDelete={handleDeleteTrip}
+            onDuplicate={handleDuplicateTrip} // Pass the new handler
           />
         </div>
       </div>
@@ -180,6 +237,20 @@ const Trips: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Split Trip Dialog */}
+      {showSplitDialog && tripToSplit && (
+         <SplitTripDialog
+            isOpen={showSplitDialog}
+            onClose={() => {
+               setShowSplitDialog(false);
+               setTripToSplit(null);
+            }}
+            trip={tripToSplit}
+            onSplit={handleSplitTrip}
+         />
+      )}
+
 
       {/* Delete Confirmation */}
       <ConfirmDialog

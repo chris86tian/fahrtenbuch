@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Trip, Vehicle } from '../types';
 import { formatDate, formatDistance } from '../utils/helpers';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Copy } from 'lucide-react'; // Import Copy icon
 
 interface TripListProps {
   trips: Trip[];
   vehicles: Vehicle[];
   onEdit: (trip: Trip) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (trip: Trip) => void; // Add new prop for duplicate action
 }
 
-const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }) => {
+const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete, onDuplicate }) => {
   const [sortField, setSortField] = useState<keyof Trip>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -26,38 +27,44 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc'); // Default to ascending for new sort field
+      setSortDirection('asc');
     }
   };
 
   const sortedTrips = [...trips].sort((a, b) => {
-    if (sortField === 'date') {
-      // Combine date and time for accurate chronological sorting
-      const dateTimeA = new Date(`${a.date}T${a.startTime}`).getTime();
-      const dateTimeB = new Date(`${b.date}T${b.startTime}`).getTime();
-      
-      // Sort by date/time
-      if (sortDirection === 'asc') {
-        return dateTimeA - dateTimeB; // Earliest first
-      } else {
-        return dateTimeB - dateTimeA; // Latest first
-      }
+    // Primary sort by date (descending)
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    if (dateA !== dateB) {
+       return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
     }
-    
+
+    // Secondary sort by start time for trips on the same day
+    const timeA = a.startTime.split(':').map(Number);
+    const timeB = b.startTime.split(':').map(Number);
+    const timeComparison = (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+
+    // Apply sort direction based on sortField, but for date, secondary sort is always ascending time
+    if (sortField === 'date') {
+        return timeComparison; // Always sort by time ascending for same date
+    }
+
+    // For other fields, use the selected sort direction
     if (sortField === 'startOdometer' || sortField === 'endOdometer') {
       return sortDirection === 'asc'
         ? a[sortField] - b[sortField]
         : b[sortField] - a[sortField];
     }
-    
+
     // Handle potential null/undefined notes for sorting
     const valueA = String(a[sortField] ?? '').toLowerCase();
     const valueB = String(b[sortField] ?? '').toLowerCase();
-    
+
     return sortDirection === 'asc'
       ? valueA.localeCompare(valueB)
       : valueB.localeCompare(valueA);
   });
+
 
   if (trips.length === 0) {
     return <p className="text-gray-500 text-center py-4">Keine Fahrten vorhanden.</p>;
@@ -112,7 +119,7 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
           {sortedTrips.map((trip) => {
             const vehicle = vehicles.find(v => v.id === trip.vehicleId);
             const distance = trip.endOdometer - trip.startOdometer;
-            
+
             return (
               <tr key={trip.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -141,6 +148,14 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                   {/* Duplicate Button */}
+                   <button
+                    onClick={() => onDuplicate(trip)}
+                    className="text-gray-600 hover:text-gray-900 mr-3"
+                    aria-label="Duplizieren und Aufteilen"
+                  >
+                    <Copy size={18} />
+                  </button>
                   <button
                     onClick={() => onEdit(trip)}
                     className="text-blue-600 hover:text-blue-900 mr-3"
