@@ -26,15 +26,22 @@ const TripList: React.FC<TripListProps> = ({ trips, vehicles, onEdit, onDelete }
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection('asc'); // Default to ascending for new sort field
     }
   };
 
   const sortedTrips = [...trips].sort((a, b) => {
     if (sortField === 'date') {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+      // Combine date and time for accurate chronological sorting
+      const dateTimeA = new Date(`${a.date}T${a.startTime}`).getTime();
+      const dateTimeB = new Date(`${b.date}T${b.startTime}`).getTime();
+      
+      // Sort by date/time
+      if (sortDirection === 'asc') {
+        return dateTimeA - dateTimeB; // Earliest first
+      } else {
+        return dateTimeB - dateTimeA; // Latest first
+      }
     }
     
     if (sortField === 'startOdometer' || sortField === 'endOdometer') {
