@@ -4,15 +4,16 @@ import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './components/LoginPage';
+import RegisterPage from './pages/RegisterPage'; // Import the new RegisterPage
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
 import Settings from './pages/Settings';
 import RecordTrip from './pages/RecordTrip';
-import Trips from './pages/Trips'; // Import the new Trips page
+import Trips from './pages/Trips';
 import LoadingIndicator from './components/LoadingIndicator';
 import './index.css';
-import { AppPages } from './types'; // Import AppPages type
+import { AppPages } from './types';
 
 // ProtectedRoute remains the same: Checks auth and redirects if needed
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -38,7 +39,7 @@ const AppLayout: React.FC = () => {
     else if (path.startsWith('/app/vehicles')) setActivePage('vehicles');
     else if (path.startsWith('/app/settings')) setActivePage('settings');
     else if (path.startsWith('/app/record-trip')) setActivePage('record-trip');
-    else if (path.startsWith('/app/trips')) setActivePage('trips'); // Handle new trips page
+    else if (path.startsWith('/app/trips')) setActivePage('trips');
     else setActivePage('dashboard'); // Default
   }, [window.location.pathname]); // Update when pathname changes
 
@@ -85,6 +86,18 @@ const LandingRoute: React.FC = () => {
   return isAuthenticated ? <Navigate to="/app" replace /> : <LandingPage />;
 };
 
+// Component to conditionally render Register or redirect to App
+const RegisterRoute: React.FC = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
+  }
+
+  return isAuthenticated ? <Navigate to="/app" replace /> : <RegisterPage />;
+};
+
+
 function App() {
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -108,6 +121,7 @@ function App() {
           {/* Public routes - Do NOT need AppProvider */}
           <Route path="/" element={<LandingRoute />} />
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/register" element={<RegisterRoute />} /> {/* Add the new register route */}
           
           {/* Protected application route - NEEDS AppProvider */}
           <Route

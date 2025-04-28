@@ -9,6 +9,7 @@ import ReminderModal from '../components/ReminderModal';
 import TaxReportCard from '../components/TaxReportCard';
 import LoadingIndicator from '../components/LoadingIndicator';
 import { useNavigate } from 'react-router-dom';
+import { checkFahrtenbuch } from '../utils/validation'; // Import checkFahrtenbuch
 
 const Dashboard: React.FC = () => {
   const { vehicles, trips, reminderSettings, stats, activeVehicle, loading } = useAppContext();
@@ -17,21 +18,43 @@ const Dashboard: React.FC = () => {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showTaxReport, setShowTaxReport] = useState(false);
+  const [validationResult, setValidationResult] = useState<{
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+  } | null>(null); // State to store validation result
 
-  // Get available years from trips
+  // Get available years from trips (only complete trips for reports)
   const availableYears = React.useMemo(() => {
     const years = new Set<number>();
-    trips.forEach(trip => {
+    // Only consider complete trips for available years in reports
+    const completeTrips = trips.filter(trip => trip.status === 'complete');
+    completeTrips.forEach(trip => {
       const year = new Date(trip.date).getFullYear();
       years.add(year);
     });
+     // Always include current year if no trips exist yet
+    const currentYear = new Date().getFullYear();
+    years.add(currentYear);
     return Array.from(years).sort((a, b) => b - a); // Sort descending
   }, [trips]);
 
-  // Filter trips for the selected year (still needed for YearlyStatsCard and TaxReportCard)
-  const yearlyTrips = React.useMemo(() => {
-    return trips.filter(trip => new Date(trip.date).getFullYear() === selectedYear);
+  // Filter trips for the selected year (only complete trips for YearlyStatsCard and TaxReportCard)
+  const yearlyCompleteTrips = React.useMemo(() => {
+    return trips.filter(trip => new Date(trip.date).getFullYear() === selectedYear && trip.status === 'complete');
   }, [trips, selectedYear]);
+
+  // Run validation whenever trips or vehicles change
+  useEffect(() => {
+      // We only need to check for partial trips here to disable the tax report
+      const hasPartialTrips = trips.some(trip => trip.status === 'partial');
+      setValidationResult({
+          valid: !hasPartialTrips, // Invalid if any partial trips exist
+          errors: hasPartialTrips ? ['Es existieren unvollständige Fahrten. Bitte vervollständigen Sie diese, bevor Sie Berichte exportieren.'] : [],
+          warnings: [] // Warnings are handled by the full check in FahrtenbuchCheckSection
+      });
+  }, [trips, vehicles]); // Depend on trips and vehicles
+
 
   // Handle reminder logic
   useEffect(() => {
@@ -58,11 +81,11 @@ const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <VehicleSelector />
 
-      {/* Overall Stats Card */}
+      {/* Overall Stats Card (uses stats from AppContext, which now only includes complete trips) */}
       <StatsCard stats={stats} title="Fahrtenstatistik gesamt" />
 
       {/* Year Selector for Stats and Tax Report */}
-      {availableYears.length > 0 && (
+      {(availableYears.length > 0 || trips.length === 0) && ( // Show year selector even if no trips yet
         <div className="bg-white shadow rounded-lg p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">
             <div className="mb-3 sm:mb-0">
@@ -78,19 +101,23 @@ const Dashboard: React.FC = () => {
                 {availableYears.map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
+                 {/* Add current year if not in available years and no trips exist */}
+                 {trips.length === 0 && !availableYears.includes(new Date().getFullYear()) && (
+                    <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>
+                 )}
               </select>
             </div>
           </div>
         </div>
       )}
 
-      {/* Yearly Stats Card */}
-      {yearlyTrips.length > 0 && (
-        <YearlyStatsCard trips={yearlyTrips} year={selectedYear} />
+      {/* Yearly Stats Card (uses filtered complete trips) */}
+      {yearlyCompleteTrips.length > 0 && (
+        <YearlyStatsCard trips={yearlyCompleteTrips} year={selectedYear} />
       )}
 
       {/* Tax Report Toggle */}
-      {availableYears.length > 0 && (
+      {(availableYears.length > 0 || trips.length === 0) && ( // Show toggle even if no trips yet
         <div className="bg-white shadow rounded-lg p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">
             <div className="mb-3 sm:mb-0">
@@ -98,24 +125,39 @@ const Dashboard: React.FC = () => {
               <p className="text-sm text-gray-600">Steuerrelevante Auswertung Ihrer Fahrten für das Jahr {selectedYear}</p>
             </div>
             <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setShowTaxReport(!showTaxReport)}
-                className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                  showTaxReport
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-blue-500'
-                }`}
-              >
-                {showTaxReport ? 'Bericht ausblenden' : 'Bericht anzeigen'}
-              </button>
+               {/* Show validation error if partial trips exist */}
+               {validationResult && !validationResult.valid ? (
+                   <div className="text-red-600 text-sm flex items-center">
+                       <AlertTriangle size={16} className="mr-1" />
+                       Bericht nicht verfügbar (unvollständige Fahrten)
+                   </div>
+               ) : (
+                   <button
+                     onClick={() => setShowTaxReport(!showTaxReport)}
+                     className={`px-4 py-2 text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                       showTaxReport
+                         ? 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
+                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-blue-500'
+                     }`}
+                     disabled={yearlyCompleteTrips.length === 0} // Disable if no complete trips for the year
+                   >
+                     {showTaxReport ? 'Bericht ausblenden' : 'Bericht anzeigen'}
+                   </button>
+               )}
             </div>
           </div>
+           {yearlyCompleteTrips.length === 0 && validationResult && validationResult.valid && (
+              <p className="mt-3 text-sm text-gray-500">
+                Keine vollständigen Fahrten für das Jahr {selectedYear} vorhanden, um einen Bericht zu erstellen.
+              </p>
+           )}
         </div>
       )}
 
-      {/* Tax Report Card */}
-      {showTaxReport && yearlyTrips.length > 0 && (
-        <TaxReportCard trips={yearlyTrips} vehicles={vehicles} year={selectedYear} />
+
+      {/* Tax Report Card (uses filtered complete trips) */}
+      {showTaxReport && yearlyCompleteTrips.length > 0 && (
+        <TaxReportCard trips={yearlyCompleteTrips} vehicles={vehicles} year={selectedYear} />
       )}
 
       {/* Link to Trips page */}

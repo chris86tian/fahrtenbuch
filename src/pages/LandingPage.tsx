@@ -20,14 +20,14 @@ const LandingPage: React.FC = () => {
             </button>
           </div>
         </nav>
-        
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="text-center">
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
               Digitales Fahrtenbuch für Ihre Flotte
             </h1>
             <p className="text-xl text-blue-100 mb-8 max-w-3xl mx-auto">
-              Erfassen Sie Ihre Fahrten einfach und rechtskonform. 
+              Erfassen Sie Ihre Fahrten einfach und rechtskonform.
               Sparen Sie Zeit und Geld mit unserem digitalen Fahrtenbuch.
             </p>
             <button
@@ -47,7 +47,7 @@ const LandingPage: React.FC = () => {
           <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
             Ihre Vorteile mit Flottlog
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="bg-white p-6 rounded-lg shadow-md">
               <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">

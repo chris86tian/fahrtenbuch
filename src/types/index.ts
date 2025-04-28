@@ -7,10 +7,12 @@ export type Vehicle = {
   year: number;
   initialOdometer: number;
   currentOdometer: number;
+  defaultStartLocation?: string | null; // Added default start location
   created_at?: string; // Optional: Supabase timestamp
 };
 
 export type TripPurpose = 'business' | 'private' | 'commute';
+export type TripStatus = 'complete' | 'partial'; // Added trip status type
 
 export type Trip = {
   id: string; // Supabase UUID
@@ -26,6 +28,7 @@ export type Trip = {
   endOdometer: number;
   driverName: string;
   notes?: string;
+  status: TripStatus; // Added trip status
   created_at?: string; // Optional: Supabase timestamp
 };
 
@@ -46,5 +49,4 @@ export type DashboardStats = {
   commuteDistance: number;
 };
 
-// Added new page type
 export type AppPages = 'dashboard' | 'vehicles' | 'settings' | 'record-trip' | 'trips';

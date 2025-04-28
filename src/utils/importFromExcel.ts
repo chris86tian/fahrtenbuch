@@ -1,8 +1,8 @@
-import { Trip, Vehicle } from '../types';
+import { Trip, Vehicle, TripStatus } from '../types'; // Import TripStatus
 import { generateId } from './helpers'; // generateId is no longer needed here, but keep import for now
 
 // Keep the original values to store the raw strings from the CSV
-interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'startOdometer' | 'endOdometer' | 'user_id'> {
+interface ImportedTrip extends Omit<Trip, 'id' | 'vehicleId' | 'startOdometer' | 'endOdometer' | 'user_id' | 'status'> { // Omit status
   fahrzeugkennzeichen: string;
   originalStartOdometerValue: string | null; // Store the raw value from CSV column 6
   originalEndOdometerValue: string | null; // Store the raw value from CSV column 7
@@ -90,7 +90,6 @@ export const validateImportedTrips = (
     } else {
         const parsedStartOdometer = parseInt(trip.originalStartOdometerValue);
         if (isNaN(parsedStartOdometer)) {
-            // Corrected error message to show the actual problematic value
             errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Start). Erwartet wurde eine Zahl, gefunden wurde "${trip.originalStartOdometerValue}". Bitte prüfen Sie die 7. Spalte Ihrer CSV-Datei.`);
         } else {
             startOdometer = parsedStartOdometer; // Store the successfully parsed value
@@ -104,7 +103,6 @@ export const validateImportedTrips = (
     } else {
         const parsedEndOdometer = parseInt(trip.originalEndOdometerValue);
         if (isNaN(parsedEndOdometer)) {
-            // This error message correctly shows the problematic value
             errors.push(`Zeile ${rowNumber}: Ungültiger Wert für Kilometerstand (Ende). Erwartet wurde eine Zahl, gefunden wurde "${trip.originalEndOdometerValue}". Bitte prüfen Sie die 8. Spalte Ihrer CSV-Datei.`);
         } else {
             endOdometer = parsedEndOdometer; // Store the successfully parsed value
@@ -119,6 +117,12 @@ export const validateImportedTrips = (
     // Validate required fields
     if (!trip.startLocation || !trip.endLocation || !trip.driverName) {
       errors.push(`Zeile ${rowNumber}: Pflichtfelder fehlen (Startort, Zielort oder Fahrer)`);
+    }
+
+    // For imported trips, we assume they are complete.
+    // Check if end time, end location, and end odometer are present.
+    if (!trip.endTime || !trip.endLocation || endOdometer === null || endOdometer === undefined || isNaN(endOdometer)) {
+         errors.push(`Zeile ${rowNumber}: Unvollständige Fahrt erkannt. Importierte Fahrten müssen vollständig sein (Endzeit, Zielort, Kilometerstand Ende).`);
     }
   }
 
@@ -162,19 +166,25 @@ export const convertImportedTrips = (trips: ImportedTrip[], vehicles: Vehicle[])
     const endOdometer = parseInt(originalEndOdometerValue!);
 
     if (isNaN(startOdometer)) {
+        // This error should ideally be caught by validation, but included for robustness
+        console.error(`Convert error: Start-Kilometerstand is NaN for trip on ${tripData.date}. Value: "${originalStartOdometerValue}"`);
+        // Decide how to handle: throw error, return null, or default? Let's throw for now.
         throw new Error(`Konvertierungsfehler: Start-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalStartOdometerValue}"`);
     }
     if (isNaN(endOdometer)) {
-        throw new Error(`Konvertierungsfehler: End-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalEndOdometerValue}"`);
+         // This error should ideally be caught by validation, but included for robustness
+        console.error(`Convert error: End-Kilometerstand is NaN for trip on ${tripData.date}. Value: "${originalEndOdometerValue}"`);
+         throw new Error(`Konvertierungsfehler: End-Kilometerstand ist ungültig für Fahrt am ${tripData.date}. Wert: "${originalEndOdometerValue}"`);
     }
 
-    // Return the object WITHOUT the 'id' field
+
+    // Return the object WITHOUT the 'id' field, and set status to 'complete' for imported trips
     return {
       ...tripData,
-      // id: generateId(), // REMOVED THIS LINE
       vehicleId: targetVehicleId, // Assign the ID of the first vehicle
       startOdometer: startOdometer, // Assign the parsed value
       endOdometer: endOdometer, // Assign the parsed value
+      status: 'complete', // Imported trips are assumed to be complete
     };
   });
 };

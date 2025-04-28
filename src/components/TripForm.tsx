@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trip, Vehicle, TripPurpose } from '../types';
+import { Trip, Vehicle, TripPurpose, TripStatus } from '../types'; // Import TripStatus
 import { useAppContext } from '../context/AppContext';
 
 interface TripFormProps {
   trip?: Trip;
   vehicleId?: string;
-  onSubmit: (trip: Omit<Trip, 'id'>) => void;
+  onSubmit: (trip: Omit<Trip, 'id' | 'user_id'>) => void; // Adjusted type
   onCancel: () => void;
 }
 
 const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel }) => {
-  const { vehicles, trips } = useAppContext(); // Get trips from context
+  const { vehicles, trips, activeVehicle } = useAppContext(); // Get trips and activeVehicle from context
 
   const [selectedVehicleId, setSelectedVehicleId] = useState(trip?.vehicleId || vehicleId || '');
   const [date, setDate] = useState(trip?.date || new Date().toISOString().split('T')[0]);
@@ -24,9 +24,13 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
   const [driverName, setDriverName] = useState(trip?.driverName || '');
   const [notes, setNotes] = useState(trip?.notes || '');
   const [distance, setDistance] = useState(0);
+  const [isPartial, setIsPartial] = useState(trip?.status === 'partial'); // State for partial trip
 
-  // Get the selected vehicle
-  const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
+  // Get the selected vehicle (either the one from the trip being edited or the active vehicle)
+  const currentSelectedVehicle = useMemo(() => {
+    return vehicles.find(v => v.id === selectedVehicleId);
+  }, [vehicles, selectedVehicleId]);
+
 
   // Extract unique driver names from all trips
   const uniqueDrivers = useMemo(() => {
@@ -39,34 +43,100 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
     return Array.from(drivers).sort(); // Sort alphabetically
   }, [trips]);
 
-  // Set initial odometer readings from vehicle when creating a new trip
+  // Set initial odometer readings and default start location when creating a new trip
   useEffect(() => {
-    if (!trip && selectedVehicle && selectedVehicle.currentOdometer > 0) {
-      setStartOdometer(selectedVehicle.currentOdometer);
-      setEndOdometer(selectedVehicle.currentOdometer);
+    if (!trip && currentSelectedVehicle) { // Only for new trips and if a vehicle is selected
+      // Set initial odometer from vehicle's current odometer
+      if (currentSelectedVehicle.currentOdometer > 0) {
+        setStartOdometer(currentSelectedVehicle.currentOdometer);
+        setEndOdometer(currentSelectedVehicle.currentOdometer); // End odometer defaults to start for new trips
+      } else {
+         setStartOdometer(0);
+         setEndOdometer(0);
+      }
+
+      // Set default start location if available
+      if (currentSelectedVehicle.defaultStartLocation) {
+        setStartLocation(currentSelectedVehicle.defaultStartLocation);
+      } else {
+         setStartLocation(''); // Clear if no default
+      }
+    } else if (trip) {
+       // When editing, ensure state matches the trip data
+       setStartOdometer(trip.startOdometer);
+       setEndOdometer(trip.endOdometer);
+       setStartLocation(trip.startLocation);
+       setEndLocation(trip.endLocation);
+       setIsPartial(trip.status === 'partial');
     }
-  }, [trip, selectedVehicle]);
+  }, [trip, currentSelectedVehicle]); // Depend on trip and the currently selected vehicle
+
 
   // Calculate distance when odometer readings change
   useEffect(() => {
     setDistance(endOdometer - startOdometer);
   }, [startOdometer, endOdometer]);
 
+  // Handle vehicle selection change - update start odometer and default location for NEW trips
+  useEffect(() => {
+      if (!trip && currentSelectedVehicle) { // Only for new trips
+          if (currentSelectedVehicle.currentOdometer > 0) {
+              setStartOdometer(currentSelectedVehicle.currentOdometer);
+              setEndOdometer(currentSelectedVehicle.currentOdometer);
+          } else {
+              setStartOdometer(0);
+              setEndOdometer(0);
+          }
+          if (currentSelectedVehicle.defaultStartLocation) {
+              setStartLocation(currentSelectedVehicle.defaultStartLocation);
+          } else {
+              setStartLocation('');
+          }
+      }
+  }, [trip, currentSelectedVehicle]);
+
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Basic validation for required fields even for partial trips
+    if (!selectedVehicleId || !date || !startTime || !startLocation || !driverName || purpose === undefined) {
+        alert('Bitte füllen Sie die erforderlichen Felder aus: Fahrzeug, Datum, Startzeit, Startort, Fahrer, Zweck.');
+        return;
+    }
+
+    // Additional validation for complete trips
+    if (!isPartial) {
+        if (!endTime || !endLocation || endOdometer === null || endOdometer === undefined || isNaN(endOdometer)) {
+             alert('Bitte füllen Sie die Felder für das Ende der Fahrt aus oder markieren Sie die Fahrt als unvollständig.');
+             return;
+        }
+         if (endOdometer < startOdometer) {
+            alert('Der End-Kilometerstand kann nicht kleiner sein als der Start-Kilometerstand.');
+            return;
+         }
+    } else {
+        // If saving as partial, ensure end odometer is 0 or null (database default is 0)
+        // and end time/location are empty.
+        setEndTime('');
+        setEndLocation('');
+        setEndOdometer(0); // Ensure it's 0 for partial saves
+    }
+
 
     onSubmit({
       vehicleId: selectedVehicleId,
       date,
       startTime,
-      endTime,
+      endTime: isPartial ? '' : endTime, // Save empty string if partial
       startLocation,
-      endLocation,
+      endLocation: isPartial ? '' : endLocation, // Save empty string if partial
       purpose,
       startOdometer,
-      endOdometer,
+      endOdometer: isPartial ? 0 : endOdometer, // Save 0 if partial
       driverName,
       notes,
+      status: isPartial ? 'partial' : 'complete', // Set status based on checkbox
     });
   };
 
@@ -177,8 +247,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 id="endTime"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
               />
             </div>
           </div>
@@ -207,8 +278,9 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 id="endLocation"
                 value={endLocation}
                 onChange={(e) => setEndLocation(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-                required
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
               />
             </div>
           </div>
@@ -238,9 +310,10 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 id="endOdometer"
                 value={endOdometer}
                 onChange={(e) => setEndOdometer(parseInt(e.target.value))}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
                 min={startOdometer}
-                required
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
               />
             </div>
             <div>
@@ -253,6 +326,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
                 value={distance}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 p-2 border"
                 readOnly
+                disabled={isPartial} // Disable distance display if partial
               />
             </div>
           </div>
@@ -270,6 +344,27 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
               rows={3}
             />
           </div>
+
+          {/* Checkbox for Partial Trip */}
+          {!trip && ( // Only show for new trips
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isPartial"
+                checked={isPartial}
+                onChange={(e) => setIsPartial(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isPartial" className="ml-2 block text-sm text-gray-900">
+                Fahrt nur starten (später vervollständigen)
+              </label>
+            </div>
+          )}
+           {trip && trip.status === 'partial' && ( // Show info for existing partial trips
+             <div className="p-3 bg-yellow-50 text-yellow-700 rounded-md text-sm">
+               Diese Fahrt ist unvollständig. Bitte füllen Sie die fehlenden Felder aus, um sie zu vervollständigen.
+             </div>
+           )}
         </div>
       </div>
 
@@ -286,7 +381,7 @@ const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel
           type="submit"
           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
-          Speichern
+          {trip && trip.status === 'partial' ? 'Fahrt vervollständigen' : 'Speichern'}
         </button>
       </div>
     </form>

@@ -3,7 +3,7 @@ import { Vehicle } from '../types';
 
 interface VehicleFormProps {
   vehicle?: Vehicle;
-  onSubmit: (vehicle: Omit<Vehicle, 'id'>) => void;
+  onSubmit: (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => void; // Adjusted type to omit user_id
   onCancel: () => void;
 }
 
@@ -14,6 +14,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onCancel }
   const [year, setYear] = useState(vehicle?.year || new Date().getFullYear());
   const [initialOdometer, setInitialOdometer] = useState(vehicle?.initialOdometer || 0);
   const [currentOdometer, setCurrentOdometer] = useState(vehicle?.currentOdometer || 0);
+  const [defaultStartLocation, setDefaultStartLocation] = useState(vehicle?.defaultStartLocation || ''); // Added state for default start location
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +25,7 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onCancel }
       year,
       initialOdometer,
       currentOdometer: initialOdometer > 0 ? Math.max(initialOdometer, currentOdometer) : currentOdometer,
+      defaultStartLocation: defaultStartLocation.trim() === '' ? null : defaultStartLocation.trim(), // Save empty string as null
     });
   };
 
@@ -116,6 +118,22 @@ const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onCancel }
           required
         />
       </div>
+
+      {/* New field for Default Start Location */}
+      <div>
+        <label htmlFor="defaultStartLocation" className="block text-sm font-medium text-gray-700">
+          Standard Startort (Optional)
+        </label>
+        <input
+          type="text"
+          id="defaultStartLocation"
+          value={defaultStartLocation || ''} // Use '' for controlled input
+          onChange={(e) => setDefaultStartLocation(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+          placeholder="z.B. Zuhause"
+        />
+      </div>
+
 
       <div className="flex justify-end space-x-3">
         <button

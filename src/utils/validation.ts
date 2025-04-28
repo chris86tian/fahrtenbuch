@@ -17,9 +17,27 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // --- Check 1: Required Fields & Basic Odometer Order ---
-  console.log("Validation: Checking required fields and basic odometer order...");
-  trips.forEach((trip) => {
+  // --- Check 0: Check for any partial trips ---
+  console.log("Validation: Checking for partial trips...");
+  const partialTrips = trips.filter(trip => trip.status === 'partial');
+  if (partialTrips.length > 0) {
+      errors.push(`Es existieren ${partialTrips.length} unvollständige Fahrten. Bitte vervollständigen Sie diese.`);
+      // We can list them as warnings if needed, but the requirement is to prevent reports if any exist.
+      // Let's add them as warnings for visibility in the check result.
+      partialTrips.forEach(trip => {
+          warnings.push(`Unvollständige Fahrt: ${new Date(trip.date).toLocaleDateString('de-DE')} ${trip.startTime} - ${trip.startLocation} (${trip.id})`);
+      });
+  }
+  console.log(`Validation: Partial trip check finished. Found ${partialTrips.length} partial trips.`);
+
+
+  // Filter out partial trips for subsequent checks that assume complete data
+  const completeTrips = trips.filter(trip => trip.status === 'complete');
+
+
+  // --- Check 1: Required Fields & Basic Odometer Order (only for complete trips) ---
+  console.log("Validation: Checking required fields and basic odometer order for complete trips...");
+  completeTrips.forEach((trip) => {
     const tripIdentifier = `Fahrt vom ${new Date(trip.date).toLocaleDateString('de-DE')} (${trip.id})`;
 
     if (!trip.vehicleId) errors.push(`${tripIdentifier}: Fahrzeug fehlt.`);
@@ -45,10 +63,10 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
   console.log(`Validation: Required fields and basic odometer order check finished. Found ${errors.length} errors.`);
 
 
-  // --- Check 2: Odometer Gaps, Overlaps, and Unrealistic Jumps (per vehicle) ---
-  console.log("Validation: Checking odometer continuity and jumps...");
+  // --- Check 2: Odometer Gaps, Overlaps, and Unrealistic Jumps (per vehicle, only for complete trips) ---
+  console.log("Validation: Checking odometer continuity and jumps for complete trips...");
   const tripsByVehicle: { [vehicleId: string]: Trip[] } = {};
-  trips.forEach(trip => {
+  completeTrips.forEach(trip => { // Use completeTrips here
     if (trip.vehicleId) {
       if (!tripsByVehicle[trip.vehicleId]) {
         tripsByVehicle[trip.vehicleId] = [];
@@ -57,8 +75,6 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
     }
   });
 
-  // Define a threshold for unrealistic jumps (e.g., 1000 km in a single trip)
-  // This is a heuristic and might need adjustment based on typical usage.
   const UNREALISTIC_JUMP_THRESHOLD = 1000; // km
 
   Object.keys(tripsByVehicle).forEach(vehicleId => {
@@ -95,8 +111,9 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
       if (i < vehicleTrips.length - 1) {
         const nextTrip = vehicleTrips[i + 1];
 
-        // Only check continuity if both trips have valid odometer readings
+        // Only check continuity if both are complete trips and have valid odometer readings
         if (
+          currentTrip.status === 'complete' && nextTrip.status === 'complete' &&
           currentTrip.endOdometer !== null && currentTrip.endOdometer !== undefined && !isNaN(currentTrip.endOdometer) &&
           nextTrip.startOdometer !== null && nextTrip.startOdometer !== undefined && !isNaN(nextTrip.startOdometer)
         ) {
@@ -117,9 +134,11 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
                 );
              }
           }
+        } else if (currentTrip.status === 'partial' || nextTrip.status === 'partial') {
+            // If either trip is partial, we skip this continuity check for this pair.
+            // The presence of partial trips is already reported in Check 0.
         } else {
-            // If odometer values are invalid, an error is already reported in Check 1.
-            // We could add a warning here, but the error is more critical.
+             // If odometer values are invalid for complete trips, an error is already reported in Check 1.
         }
       }
     }
@@ -127,8 +146,8 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
    console.log(`Validation: Odometer continuity and jumps check finished. Found ${errors.length} errors and ${warnings.length} warnings.`);
 
 
-  // --- Check 3: Trip Time Plausibility (per vehicle) ---
-  console.log("Validation: Checking trip time plausibility...");
+  // --- Check 3: Trip Time Plausibility (per vehicle, only for complete trips) ---
+  console.log("Validation: Checking trip time plausibility for complete trips...");
    Object.keys(tripsByVehicle).forEach(vehicleId => {
     const vehicleTrips = tripsByVehicle[vehicleId];
     const vehicle = vehicles.find(v => v.id === vehicleId);
@@ -139,6 +158,11 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
     for (let i = 0; i < vehicleTrips.length; i++) {
       const currentTrip = vehicleTrips[i];
       const currentTripIdentifier = `Fahrt vom ${new Date(currentTrip.date).toLocaleDateString('de-DE')} ${currentTrip.startTime}-${currentTrip.endTime} (${currentTrip.id})`;
+
+      // Only check time plausibility for complete trips
+      if (currentTrip.status !== 'complete') {
+          continue;
+      }
 
       // Check for valid time format (already done in Check 1, but good to be sure)
       if (!isValidTime(currentTrip.startTime) || !isValidTime(currentTrip.endTime)) {
@@ -162,25 +186,27 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
       }
 
 
-      // Check for overlaps with the next trip
+      // Check for overlaps with the next trip (only if next trip is also complete)
       if (i < vehicleTrips.length - 1) {
         const nextTrip = vehicleTrips[i + 1];
 
-        // Check for valid time format for the next trip
-        if (!isValidTime(nextTrip.startTime)) {
-           // Error already reported in Check 1
-           continue;
-        }
+        if (nextTrip.status === 'complete') {
+            // Check for valid time format for the next trip
+            if (!isValidTime(nextTrip.startTime)) {
+               // Error already reported in Check 1
+               continue;
+            }
 
-        const nextStartTime = new Date(`${nextTrip.date}T${nextTrip.startTime}`).getTime();
+            const nextStartTime = new Date(`${nextTrip.date}T${nextTrip.startTime}`).getTime();
 
-        // An overlap occurs if the current trip's end time is after the next trip's start time
-        if (currentEndTime > nextStartTime) {
-          errors.push(
-            `Zeitliche Überschneidung für Fahrzeug ${vehicleIdentifier}: ` +
-            `Fahrt am ${new Date(currentTrip.date).toLocaleDateString('de-DE')} endet um ${currentTrip.endTime}, ` +
-            `nächste Fahrt am ${new Date(nextTrip.date).toLocaleDateString('de-DE')} beginnt um ${nextTrip.startTime}.`
-          );
+            // An overlap occurs if the current trip's end time is after the next trip's start time
+            if (currentEndTime > nextStartTime) {
+              errors.push(
+                `Zeitliche Überschneidung für Fahrzeug ${vehicleIdentifier}: ` +
+                `Fahrt am ${new Date(currentTrip.date).toLocaleDateString('de-DE')} endet um ${currentTrip.endTime}, ` +
+                `nächste Fahrt am ${new Date(nextTrip.date).toLocaleDateString('de-DE')} beginnt um ${nextTrip.startTime}.`
+              );
+            }
         }
       }
     }
@@ -189,12 +215,8 @@ export const checkFahrtenbuch = (trips: Trip[], vehicles: Vehicle[]): Validation
 
 
   // --- Check 4: Daily Entries (Ambiguity Note) ---
-  // The requirement "Prüfe, ob für jeden Tag mit Fahrzeugbewegung mindestens ein Fahrteintrag existiert"
-  // is difficult to verify with only the trip data itself. We cannot know if a vehicle moved
-  // on a specific day if no trip was recorded for that day.
-  // The odometer continuity check (Check 2) implicitly covers chronological gaps between trips
-  // for the same vehicle, which is the closest we can get to this requirement using only the provided data.
-  // We will add a note about this limitation in the UI.
+  // This check remains an ambiguity as explained before. The odometer continuity check
+  // is the closest we get.
 
 
   return {

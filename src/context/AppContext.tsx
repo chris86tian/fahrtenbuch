@@ -13,8 +13,8 @@ interface AppContextType {
   updateVehicle: (vehicle: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
   setActiveVehicle: (vehicle: Vehicle | null) => void;
-  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>; // Keep for single inserts
-  addTripsBatch: (trips: Omit<Trip, 'id' | 'user_id'>[]) => Promise<{ data: Trip[] | null; error: any }>; // New function for batch inserts
+  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>;
+  addTripsBatch: (trips: Omit<Trip, 'id' | 'user_id'>[]) => Promise<{ data: Trip[] | null; error: any }>;
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
   deleteAllTrips: () => Promise<void>;
@@ -30,7 +30,7 @@ const defaultReminderSettings: ReminderSettings = {
 
 const calculateStats = (trips: Trip[]): DashboardStats => {
   const stats: DashboardStats = {
-    totalTrips: trips.length,
+    totalTrips: 0, // Count only complete trips for stats
     businessTrips: 0,
     privateTrips: 0,
     commuteTrips: 0,
@@ -40,7 +40,12 @@ const calculateStats = (trips: Trip[]): DashboardStats => {
     commuteDistance: 0,
   };
 
-  trips.forEach(trip => {
+  // Only include complete trips in stats calculation
+  const completeTrips = trips.filter(trip => trip.status === 'complete');
+
+  stats.totalTrips = completeTrips.length;
+
+  completeTrips.forEach(trip => {
     const distance = trip.endOdometer - trip.startOdometer;
     stats.totalDistance += distance;
 
@@ -119,8 +124,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setLoading(true);
         console.log("AppContext: Loading all trips for user:", user.id);
-        
-        // Fetch all trips without ordering or limiting to get all data
+
+        // Fetch all trips including the new 'status' column
         const { data, error } = await supabase
           .from('trips')
           .select('*')
@@ -132,34 +137,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         console.log(`AppContext: Total trips loaded count: ${data ? data.length : 0}`);
-        
-        // Debug: Check for 2022 trips specifically in the loaded data
-        const trips2022 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2022) : [];
-        console.log(`AppContext: Found ${trips2022.length} trips from 2022 in loaded data.`);
-        if (trips2022.length > 0) {
-          console.log("AppContext: Sample 2022 trip:", trips2022[0]);
-        } else {
-           console.log("AppContext: No trips found for 2022 in the data loaded from Supabase.");
-        }
 
-        // Debug: Check for 2023 trips specifically in the loaded data
-        const trips2023 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2023) : [];
-        console.log(`AppContext: Found ${trips2023.length} trips from 2023 in loaded data.`);
-        if (trips2023.length > 0) {
-          console.log("AppContext: Sample 2023 trip:", trips2023[0]);
-        } else {
-           console.log("AppContext: No trips found for 2023 in the data loaded from Supabase.");
-        }
-        
-        // Debug: Check for 2025 trips specifically in the loaded data
-        const trips2025 = data ? data.filter(trip => new Date(trip.date).getFullYear() === 2025) : [];
-        console.log(`AppContext: Found ${trips2025.length} trips from 2025 in loaded data.`);
-        if (trips2025.length > 0) {
-          console.log("AppContext: Sample 2025 trip:", trips2025[0]);
-        } else {
-           console.log("AppContext: No trips found for 2025 in the data loaded from Supabase.");
-        }
-        
         setTrips(data || []);
       } catch (error) {
         console.error('AppContext: Fehler beim Laden der Fahrten:', error);
@@ -180,6 +158,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (vehicles.length > 0 && !activeVehicle) {
       setActiveVehicle(vehicles[0]);
+    } else if (vehicles.length === 0) {
+      setActiveVehicle(null); // Clear active vehicle if no vehicles exist
     }
   }, [vehicles, activeVehicle]);
 
@@ -214,7 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const newVehicle = data[0] as Vehicle;
         console.log("AppContext: Vehicle added successfully:", newVehicle);
         setVehicles(prev => [...prev, newVehicle]);
-        
+
         if (!activeVehicle) {
           setActiveVehicle(newVehicle);
         }
@@ -240,7 +220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       console.log("AppContext: Vehicle updated successfully.");
       setVehicles(prev => prev.map(v => (v.id === vehicle.id ? vehicle : v)));
-      
+
       if (activeVehicle?.id === vehicle.id) {
         setActiveVehicle(vehicle);
       }
@@ -265,11 +245,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       console.log("AppContext: Vehicle deleted successfully.");
       setVehicles(prev => prev.filter(v => v.id !== id));
-      
+
+      // If the deleted vehicle was the active one, set the first available vehicle as active
       if (activeVehicle?.id === id) {
         setActiveVehicle(vehicles.length > 1 ? vehicles.find(v => v.id !== id) || null : null);
       }
-      
+
       // Fahrten werden automatisch durch die Datenbank-Constraints gelöscht (ON DELETE CASCADE)
       // Wir müssen aber auch den lokalen Zustand aktualisieren
       setTrips(prev => prev.filter(t => t.vehicleId !== id));
@@ -278,7 +259,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Keep addTrip for single inserts (e.g., from the form)
   const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>): Promise<Trip | null> => {
     if (!isAuthenticated || !user) {
       console.warn("AppContext: addTrip called without authenticated user.");
@@ -293,7 +273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('AppContext: Fehler beim Hinzufügen der Fahrt:', error);
-        return null; // Return null on Supabase error
+        return null;
       }
 
       if (data && data.length > 0) {
@@ -301,29 +281,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.log("AppContext: Single trip added successfully:", newTrip);
         // Update local state immediately on success
         setTrips(prev => [...prev, newTrip]);
-        
-        // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs
-        if (trip.endOdometer > 0) {
-          const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-          if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
+
+        // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs NUR wenn die Fahrt vollständig ist
+        if (newTrip.status === 'complete' && newTrip.endOdometer > 0) {
+          const vehicle = vehicles.find(v => v.id === newTrip.vehicleId);
+          if (vehicle && newTrip.endOdometer > vehicle.currentOdometer) {
             updateVehicle({
               ...vehicle,
-              currentOdometer: trip.endOdometer
+              currentOdometer: newTrip.endOdometer
             });
           }
         }
-        return newTrip; // Return the successfully added trip
+        return newTrip;
       } else {
          console.warn("AppContext: Add single trip returned no data or error.");
-         return null; // Return null if no data returned
+         return null;
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Hinzufügen der Fahrt (catch block):', error);
-      return null; // Return null on unexpected error
+      return null;
     }
   };
 
-  // New function for batch inserts
   const addTripsBatch = async (trips: Omit<Trip, 'id' | 'user_id'>[]): Promise<{ data: Trip[] | null; error: any }> => {
     if (!isAuthenticated || !user) {
       console.warn("AppContext: addTripsBatch called without authenticated user.");
@@ -334,13 +313,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     console.log(`AppContext: Attempting to add batch of ${trips.length} trips.`);
-    const tripsWithUserId = trips.map(trip => ({ ...trip, user_id: user.id }));
+    // Ensure status is 'complete' for imported trips as per validation logic
+    const tripsWithUserIdAndStatus = trips.map(trip => ({ ...trip, user_id: user.id, status: 'complete' as TripStatus }));
+
 
     try {
       const { data, error } = await supabase
         .from('trips')
-        .insert(tripsWithUserId)
-        .select(); // Select the inserted data to confirm
+        .insert(tripsWithUserIdAndStatus)
+        .select();
 
       if (error) {
         console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch):', error);
@@ -352,18 +333,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Update local state with the newly added trips
         setTrips(prev => [...prev, ...(data as Trip[])]);
 
-        // Optional: Update vehicle odometer for the latest trip in the batch
-        // This is complex for a batch, might be better to trigger a full reload or recalculation
-        // For simplicity now, we won't update odometer here for batches.
-        // A full data reload after import will update stats and potentially odometer.
+        // Note: Updating vehicle odometer for batches is complex.
+        // A full data reload after import is recommended to ensure consistency.
+        // For now, we won't update odometer here for batches.
 
         return { data: data as Trip[], error: null };
       } else {
          console.warn("AppContext: Add trips batch returned no data or error.");
          return { data: null, error: new Error("No data returned from batch insert") };
       }
-      // Note: Supabase batch insert might have its own limits.
-      // If you have extremely large imports, you might need to break them into smaller batches manually.
     } catch (error) {
       console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch - catch block):', error);
       return { data: null, error };
@@ -387,20 +365,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       console.log("AppContext: Trip updated successfully.");
       setTrips(prev => prev.map(t => (t.id === trip.id ? trip : t)));
-      
-      // Aktualisiere den Kilometerstand des Fahrzeugs, wenn dies die neueste Fahrt ist
-      const vehicleTrips = trips
-        .filter(t => t.vehicleId === trip.vehicleId)
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      if (vehicleTrips.length > 0 && vehicleTrips[0].id === trip.id) {
-        const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-        if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
-          updateVehicle({
-            ...vehicle,
-            currentOdometer: trip.endOdometer
-          });
-        }
+
+      // Aktualisiere den Kilometerstand des Fahrzeugs NUR wenn die Fahrt vollständig ist
+      // und dies die neueste Fahrt für das Fahrzeug ist.
+      if (trip.status === 'complete' && trip.endOdometer > 0) {
+         // Find the latest complete trip for this vehicle after the update
+         const vehicleTrips = trips
+            .filter(t => t.vehicleId === trip.vehicleId && t.status === 'complete')
+            .sort((a, b) => {
+                const dateA = new Date(`${a.date}T${a.endTime}`).getTime(); // Sort by end time for latest
+                const dateB = new Date(`${b.date}T${b.endTime}`).getTime();
+                return dateB - dateA; // Descending order
+            });
+
+         // Check if the updated trip is the latest complete trip
+         if (vehicleTrips.length > 0 && vehicleTrips[0].id === trip.id) {
+            const vehicle = vehicles.find(v => v.id === trip.vehicleId);
+            if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
+              updateVehicle({
+                ...vehicle,
+                currentOdometer: trip.endOdometer
+              });
+            }
+         }
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Aktualisieren der Fahrt:', error);
@@ -423,6 +410,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       console.log("AppContext: Trip deleted successfully.");
       setTrips(prev => prev.filter(t => t.id !== id));
+
+      // Note: Deleting a trip might affect the latest odometer reading of a vehicle.
+      // A full data reload or recalculation of the latest odometer for the affected vehicle
+      // might be necessary after deletion for perfect accuracy.
+      // For simplicity now, we won't trigger a vehicle odometer update on trip deletion.
+      // The next trip addition/update for that vehicle will correct it.
+
     } catch (error) {
       console.error('AppContext: Fehler beim Löschen der Fahrt:', error);
     }
@@ -432,7 +426,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isAuthenticated || !user) return;
     console.log("AppContext: Deleting all trips for user:", user.id);
     try {
-      // CRITICAL: Use eq('user_id', user.id) to ensure only the current user's trips are deleted
       const { error } = await supabase
         .from('trips')
         .delete()
@@ -440,14 +433,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (error) {
         console.error('AppContext: Fehler beim Löschen aller Fahrten:', error);
-        // Optionally: display an error message to the user
       } else {
         console.log("AppContext: All trips deleted successfully.");
         setTrips([]); // Clear local state
+        // Reset vehicle current odometers to initial odometer after deleting all trips
+        setVehicles(prev => prev.map(v => ({ ...v, currentOdometer: v.initialOdometer })));
       }
     } catch (error) {
       console.error('AppContext: Fehler beim Löschen aller Fahrten (catch block):', error);
-      // Optionally: display an error message to the user
     }
   };
 
@@ -469,7 +462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteVehicle,
         setActiveVehicle,
         addTrip,
-        addTripsBatch, // Provide the new batch function
+        addTripsBatch,
         updateTrip,
         deleteTrip,
         deleteAllTrips,
