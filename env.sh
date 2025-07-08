@@ -1,33 +1,16 @@
-#!/bin/sh
-# env.sh - Generates a JavaScript file with runtime environment variables.
+#!/bin/bash
 
-# The output directory for env.js. Expects 'dist' as an argument.
-OUTPUT_DIR=$1
-if [ -z "$OUTPUT_DIR" ]; then
-  echo "Error: Output directory not specified." >&amp;2
-  echo "Usage: $0 <output_directory>" >&amp;2
-  exit 1
-fi
+# This script generates env.js with runtime environment variables
+# It's used in production to inject environment variables into the browser
 
-ENV_FILE="$OUTPUT_DIR/env.js"
+TARGET_DIR=${1:-dist}
 
-# Ensure the output directory exists
-mkdir -p "$OUTPUT_DIR"
+cat > "$TARGET_DIR/env.js" << EOF
+// Runtime environment variables injected by env.sh
+window.ENV = {
+  VITE_SUPABASE_URL: '${VITE_SUPABASE_URL:-https://supabase.lipahub.de}',
+  VITE_SUPABASE_ANON_KEY: '${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdGZmZ2Rramp3cGRtbXBqcnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU1ODM1MTAsImV4cCI6MjA2MTE1OTUxMH0.wZz2OxFQsSs-ESGGehxqyVUYJ9TXBnd9C_UDMQpTEuw}'
+};
+EOF
 
-# Start the env.js file
-echo "window.env = {" > "$ENV_FILE"
-
-# Grep for all environment variables starting with VITE_ and append them
-# to the window.env object in the env.js file.
-env | grep ^VITE_ | while read -r line; do
-  # Split variable into name and value
-  varname=$(echo "$line" | cut -d '=' -f 1)
-  # Use sed to properly escape double quotes inside the value
-  varvalue=$(echo "$line" | cut -d '=' -f 2- | sed 's/"/\\"/g')
-  # Add the variable to the JS object
-  echo "  $varname: \"$varvalue\"," >> "$ENV_FILE"
-done
-
-echo "}" >> "$ENV_FILE"
-
-echo "✅ Runtime config created at $ENV_FILE"
+echo "Environment variables injected into $TARGET_DIR/env.js"
