@@ -4,17 +4,15 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
-  base: './', // Wichtig für relative Pfade im Build
+  // The `base` property must be '/' for client-side routing with React Router to work correctly.
+  // This ensures that asset paths are resolved from the domain root, regardless of the current URL path.
+  base: '/',
   server: {
-    host: '0.0.0.0', // Listen on all addresses
-    port: parseInt(process.env.PORT || '3000')
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT || '3000'),
   },
   preview: {
-    host: '0.0.0.0', // Listen on all addresses
+    host: '0.0.0.0',
     port: parseInt(process.env.PORT || '3000'),
-    allowedHosts: ['flottlog.lipahub.de', 'localhost']
-  }
+  },
 });

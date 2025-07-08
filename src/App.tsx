@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './components/LoginPage';
-import RegisterPage from './pages/RegisterPage'; // Import the new RegisterPage
+import RegisterPage from './pages/RegisterPage';
 import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import Vehicles from './pages/Vehicles';
@@ -15,7 +15,7 @@ import LoadingIndicator from './components/LoadingIndicator';
 import './index.css';
 import { AppPages } from './types';
 
-// ProtectedRoute remains the same: Checks auth and redirects if needed
+// ProtectedRoute checks for authentication and redirects to the login page if the user is not authenticated.
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   
@@ -26,27 +26,24 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// Component to handle the main application layout and page switching
+// AppLayout manages the main application view and navigation.
 const AppLayout: React.FC = () => {
-  // Use AppPages type for state
-  const [activePage, setActivePage] = useState<AppPages>('dashboard');
-  const navigate = useNavigate();
+  const [activePage, setActivePage] = React.useState<AppPages>('dashboard');
+  const navigate = useNavigate(); // Corrected: useNavigate is called directly.
+  const location = useLocation();
 
-  // Use effect to update activePage based on route changes
-  useEffect(() => {
-    const path = window.location.pathname;
+  React.useEffect(() => {
+    const path = location.pathname;
     if (path.startsWith('/app/dashboard')) setActivePage('dashboard');
     else if (path.startsWith('/app/vehicles')) setActivePage('vehicles');
     else if (path.startsWith('/app/settings')) setActivePage('settings');
     else if (path.startsWith('/app/record-trip')) setActivePage('record-trip');
     else if (path.startsWith('/app/trips')) setActivePage('trips');
-    else setActivePage('dashboard'); // Default
-  }, [window.location.pathname]); // Update when pathname changes
+  }, [location]);
 
-  // Function to navigate and update activePage state
   const handleNavigate = (page: AppPages) => {
     setActivePage(page);
-    navigate(`/app/${page}`); // Use navigate to change the URL
+    navigate(`/app/${page}`);
   };
 
   return (
@@ -57,73 +54,43 @@ const AppLayout: React.FC = () => {
         <Route path="settings" element={<Settings />} />
         <Route path="record-trip" element={<RecordTrip />} />
         <Route path="trips" element={<Trips />} />
-        {/* Redirect /app to /app/dashboard by default */}
         <Route index element={<Navigate to="dashboard" replace />} />
       </Routes>
     </Layout>
   );
 };
 
-// Component to conditionally render Login or redirect to App
+// The following components handle routing logic based on authentication status.
 const LoginRoute: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
-  }
-  
+  if (loading) return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
   return isAuthenticated ? <Navigate to="/app" replace /> : <LoginPage />;
 };
 
-// Component to conditionally render Landing or redirect to App
 const LandingRoute: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-  
-  if (loading) {
-    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
-  }
-  
+  if (loading) return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
   return isAuthenticated ? <Navigate to="/app" replace /> : <LandingPage />;
 };
 
-// Component to conditionally render Register or redirect to App
 const RegisterRoute: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
-  }
-
+  if (loading) return <LoadingIndicator message="Authentifizierung wird überprüft..." />;
   return isAuthenticated ? <Navigate to="/app" replace /> : <RegisterPage />;
 };
 
-
+// The main App component, simplified to focus on routing structure.
 function App() {
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Ensure the app is properly initialized
-  useEffect(() => {
-    // Simple initialization check
-    setIsInitialized(true);
-    
-    // Log to help with debugging
-    console.log('App initialized');
-  }, []);
-
-  if (!isInitialized) {
-    return <LoadingIndicator message="Anwendung wird initialisiert..." />;
-  }
-
   return (
     <Router>
       <AuthProvider>
         <Routes>
-          {/* Public routes - Do NOT need AppProvider */}
+          {/* Public routes that are accessible to everyone */}
           <Route path="/" element={<LandingRoute />} />
           <Route path="/login" element={<LoginRoute />} />
-          <Route path="/register" element={<RegisterRoute />} /> {/* Add the new register route */}
+          <Route path="/register" element={<RegisterRoute />} />
           
-          {/* Protected application route - NEEDS AppProvider */}
+          {/* Protected application routes that require authentication */}
           <Route
             path="/app/*"
             element={
@@ -135,7 +102,7 @@ function App() {
             }
           />
 
-          {/* Fallback: Redirect to landing or app based on auth state */}
+          {/* A fallback route to redirect any unknown paths to the landing page */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
