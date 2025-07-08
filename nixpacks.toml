@@ -1,0 +1,10 @@
+# nixpacks.toml - Configuration file for the Nixpacks build system.
+# This file allows us to customize the build and start process in environments like Dokploy.
+
+[start]
+# We override the default start command.
+# 1. `sh ./env.sh dist`: First, we execute our script to generate the `dist/env.js` file
+#    with the runtime environment variables.
+# 2. `caddy run ...`: Then, we start the Caddy web server, which is the default server
+#    used by Nixpacks for static sites.
+command = "sh ./env.sh dist && caddy run --config /assets/Caddyfile --adapter caddyfile"
