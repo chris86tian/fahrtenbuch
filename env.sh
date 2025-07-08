@@ -1,22 +1,36 @@
 #!/bin/sh
-# env.sh - Generates env.js for runtime environment variables and starts nginx.
+# env.sh - Generates a JavaScript file with runtime environment variables.
 
-# The directory where Vite places the built static files.
-# Nixpacks/Docker usually runs from /app, so this path should be relative to it.
-BUILD_DIR=./dist
+# The output directory for env.js. Defaults to the Nginx web root.
+# This allows us to pass 'dist' as an argument for local preview.
+OUTPUT_DIR=${1:-/usr/share/nginx/html}
+ENV_FILE="$OUTPUT_DIR/env.js"
 
-# Create the env.js file. This file will be served by Nginx.
-# It creates a global window.ENV object for the frontend to use.
-echo "window.ENV = {" > ${BUILD_DIR}/env.js
-echo "  VITE_SUPABASE_URL: '${VITE_SUPABASE_URL}'," >> ${BUILD_DIR}/env.js
-echo "  VITE_SUPABASE_ANON_KEY: '${VITE_SUPABASE_ANON_KEY}'" >> ${BUILD_DIR}/env.js
-echo "};" >> ${BUILD_DIR}/env.js
+# Ensure the output directory exists
+mkdir -p "$OUTPUT_DIR"
 
-echo "✅ Successfully created ${BUILD_DIR}/env.js"
+# Start the env.js file
+echo "window.env = {" > "$ENV_FILE"
 
-# Start Nginx in the foreground.
-# This is the standard command for running Nginx in a Docker container.
-# 'exec' ensures that Nginx becomes the main process (PID 1),
-# which is important for proper signal handling.
-echo "🚀 Starting Nginx..."
-exec nginx -g 'daemon off;'
+# Grep for all environment variables starting with VITE_ and append them
+# to the window.env object in the env.js file.
+env | grep ^VITE_ | while read -r line; do
+  # Split variable into name and value
+  varname=$(echo "$line" | cut -d '=' -f 1)
+  varvalue=$(echo "$line" | cut -d '=' -f 2-)
+  # Add the variable to the JS object
+  echo "  $varname: \"$varvalue\"," >> "$ENV_FILE"
+done
+
+echo "}" >> "$ENV_FILE"
+
+echo "✅ Runtime config created at $ENV_FILE"
+
+# If the second argument is 'start_nginx', execute nginx.
+# This is used by the Docker container's CMD.
+if [ "$2" = "start_nginx" ]; then
+  echo "🚀 Starting Nginx server..."
+  # Use 'exec' to make Nginx the main process, which is crucial for
+  # proper signal handling and graceful shutdowns in Docker.
+  exec nginx -g 'daemon off;'
+fi

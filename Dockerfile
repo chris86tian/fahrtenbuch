@@ -30,8 +30,8 @@ FROM nginx:1.27-alpine
 # This will replace the default Nginx config.
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy the startup script that generates env.js.
-COPY --from=builder /app/env.sh /app/env.sh
+# Copy the startup script that generates env.js and starts Nginx.
+COPY env.sh /app/env.sh
 RUN chmod +x /app/env.sh
 
 # Copy the built static files from the 'builder' stage to the Nginx server directory.
@@ -43,4 +43,4 @@ EXPOSE 80
 # The command to run when the container starts.
 # It first runs our script to create the env.js file,
 # and then starts the Nginx server in the foreground.
-CMD ["/app/env.sh"]
+CMD ["/app/env.sh", "/usr/share/nginx/html", "start_nginx"]
