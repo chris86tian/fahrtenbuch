@@ -1,46 +1,46 @@
-# Dockerfile for a production-ready React application
+FROM node:18-alpine as build
 
-# ---- Stage 1: Build ----
-# Use an official Node.js image as a builder.
-# Use a specific version for reproducible builds.
-FROM node:20-alpine AS builder
-
-# Set the working directory in the container.
 WORKDIR /app
 
-# Copy package.json and package-lock.json (or yarn.lock)
+# Kopiere package.json und installiere Abhängigkeiten
 COPY package*.json ./
-
-# Install dependencies.
-# Using 'ci' is faster and safer for build environments.
 RUN npm ci
 
-# Copy the rest of the application source code.
+# Kopiere .env Datei für Build-Zeit-Umgebungsvariablen
+COPY .env ./
+
+# Kopiere den Rest des Codes
 COPY . .
 
-# Build the application for production.
-# This runs `tsc && vite build` as defined in package.json.
+# Baue die App
 RUN npm run build
 
-# ---- Stage 2: Production ----
-# Use a lightweight Nginx image for the production environment.
-FROM nginx:1.27-alpine
+FROM nginx:alpine
 
-# Copy the custom Nginx configuration.
-# This will replace the default Nginx config.
-COPY nginx.conf /etc/nginx/nginx.conf
+# Kopiere die gebaute App
+COPY --from=build /app/dist /usr/share/nginx/html
+# Kopiere die nginx-Konfiguration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy the startup script that generates env.js and starts Nginx.
-COPY env.sh /app/env.sh
-RUN chmod +x /app/env.sh
+# Erstelle eine einfache Healthcheck-Seite
+RUN echo "OK" > /usr/share/nginx/html/health
 
-# Copy the built static files from the 'builder' stage to the Nginx server directory.
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Erstelle eine Fehlerseite
+RUN echo "<html><body><h1>Error</h1><p>The application encountered an error. Please try again later.</p></body></html>" > /usr/share/nginx/html/50x.html
 
-# Expose port 80 for the Nginx server.
+# Erstelle ein Skript, um Umgebungsvariablen in die index.html einzufügen
+RUN echo '#!/bin/sh\n\
+sed -i "s|<!-- ENV_PLACEHOLDER -->|<script>\
+window.ENV = {\
+  VITE_SUPABASE_URL: \"${VITE_SUPABASE_URL}\",\
+  VITE_SUPABASE_ANON_KEY: \"${VITE_SUPABASE_ANON_KEY}\"\
+};\
+</script>|g" /usr/share/nginx/html/index.html\n\
+exec "$@"' > /docker-entrypoint.sh
+
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 80
 
-# The command to run when the container starts.
-# It first runs our script to create the env.js file,
-# and then starts the Nginx server in the foreground.
-CMD ["/app/env.sh", "/usr/share/nginx/html", "start_nginx"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

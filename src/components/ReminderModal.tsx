@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 interface ReminderModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onAddTrip: () => void;
 }
 
-const ReminderModal: React.FC<ReminderModalProps> = ({ isOpen, onClose }) => {
+const ReminderModal: React.FC<ReminderModalProps> = ({ isOpen, onClose, onAddTrip }) => {
   const navigate = useNavigate();
   
   if (!isOpen) return null;
@@ -44,7 +45,7 @@ const ReminderModal: React.FC<ReminderModalProps> = ({ isOpen, onClose }) => {
         </div>
       </div>
 
-      <style>{`
+      <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-20px); }
           to { opacity: 1; transform: translateY(0); }

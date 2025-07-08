@@ -133,7 +133,7 @@ const SplitTripDialog: React.FC<SplitTripDialogProps> = ({ isOpen, onClose, trip
         </form>
       </div>
 
-      <style>{`
+      <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-20px); }
           to { opacity: 1; transform: translateY(0); }

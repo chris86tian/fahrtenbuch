@@ -1,291 +1,387 @@
-import React, { useState, useEffect } from 'react';
-import { Trip, TripPurpose } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Trip, Vehicle, TripPurpose, TripStatus } from '../types'; // Import TripStatus
 import { useAppContext } from '../context/AppContext';
 
 interface TripFormProps {
   trip?: Trip;
   vehicleId?: string;
-  onSubmit: (trip: Omit<Trip, 'id' | 'user_id'>) => void;
+  onSubmit: (trip: Omit<Trip, 'id' | 'user_id'>) => void; // Adjusted type
   onCancel: () => void;
 }
 
 const TripForm: React.FC<TripFormProps> = ({ trip, vehicleId, onSubmit, onCancel }) => {
-  const { vehicles } = useAppContext();
+  const { vehicles, trips, activeVehicle } = useAppContext(); // Get trips and activeVehicle from context
 
-  const [formData, setFormData] = useState({
-    vehicleId: vehicleId || trip?.vehicleId || '',
-    date: trip?.date || new Date().toISOString().split('T')[0],
-    startTime: trip?.startTime || '',
-    endTime: trip?.endTime || '',
-    startLocation: trip?.startLocation || '',
-    endLocation: trip?.endLocation || '',
-    purpose: trip?.purpose || 'business' as TripPurpose,
-    startOdometer: trip?.startOdometer || 0,
-    endOdometer: trip?.endOdometer || 0,
-    driverName: trip?.driverName || '',
-    notes: trip?.notes || '',
-    status: trip?.status || 'complete' as const,
-  });
+  const [selectedVehicleId, setSelectedVehicleId] = useState(trip?.vehicleId || vehicleId || '');
+  const [date, setDate] = useState(trip?.date || new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState(trip?.startTime || '');
+  const [endTime, setEndTime] = useState(trip?.endTime || '');
+  const [startLocation, setStartLocation] = useState(trip?.startLocation || '');
+  const [endLocation, setEndLocation] = useState(trip?.endLocation || '');
+  const [purpose, setPurpose] = useState<TripPurpose>(trip?.purpose || 'business');
+  const [startOdometer, setStartOdometer] = useState(trip?.startOdometer || 0);
+  const [endOdometer, setEndOdometer] = useState(trip?.endOdometer || 0);
+  const [driverName, setDriverName] = useState(trip?.driverName || '');
+  const [notes, setNotes] = useState(trip?.notes || '');
+  const [distance, setDistance] = useState(0);
+  const [isPartial, setIsPartial] = useState(trip?.status === 'partial'); // State for partial trip
 
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Get the selected vehicle (either the one from the trip being edited or the active vehicle)
+  const currentSelectedVehicle = useMemo(() => {
+    return vehicles.find(v => v.id === selectedVehicleId);
+  }, [vehicles, selectedVehicleId]);
 
-  useEffect(() => {
-    if (vehicleId && !formData.vehicleId) {
-      setFormData(prev => ({ ...prev, vehicleId }));
-    }
-  }, [vehicleId, formData.vehicleId]);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.vehicleId) newErrors.vehicleId = 'Fahrzeug ist erforderlich';
-    if (!formData.date) newErrors.date = 'Datum ist erforderlich';
-    if (!formData.startTime) newErrors.startTime = 'Startzeit ist erforderlich';
-    if (!formData.endTime) newErrors.endTime = 'Endzeit ist erforderlich';
-    if (!formData.startLocation.trim()) newErrors.startLocation = 'Startort ist erforderlich';
-    if (!formData.endLocation.trim()) newErrors.endLocation = 'Zielort ist erforderlich';
-    if (!formData.driverName.trim()) newErrors.driverName = 'Fahrername ist erforderlich';
-    if (formData.startOdometer < 0) newErrors.startOdometer = 'Start-Kilometerstand muss positiv sein';
-    if (formData.endOdometer <= formData.startOdometer) {
-      newErrors.endOdometer = 'End-Kilometerstand muss größer als Start-Kilometerstand sein';
-    }
-
-    // Validate time order
-    if (formData.startTime && formData.endTime) {
-      const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
-      const endDateTime = new Date(`${formData.date}T${formData.endTime}`);
-      if (endDateTime <= startDateTime) {
-        newErrors.endTime = 'Endzeit muss nach der Startzeit liegen';
+  // Extract unique driver names from all trips
+  const uniqueDrivers = useMemo(() => {
+    const drivers = new Set<string>();
+    trips.forEach(t => {
+      if (t.driverName) {
+        drivers.add(t.driverName);
       }
-    }
+    });
+    return Array.from(drivers).sort(); // Sort alphabetically
+  }, [trips]);
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  // Set initial odometer readings and default start location when creating a new trip
+  useEffect(() => {
+    if (!trip && currentSelectedVehicle) { // Only for new trips and if a vehicle is selected
+      // Set initial odometer from vehicle's current odometer
+      if (currentSelectedVehicle.currentOdometer > 0) {
+        setStartOdometer(currentSelectedVehicle.currentOdometer);
+        setEndOdometer(currentSelectedVehicle.currentOdometer); // End odometer defaults to start for new trips
+      } else {
+         setStartOdometer(0);
+         setEndOdometer(0);
+      }
+
+      // Set default start location if available
+      if (currentSelectedVehicle.defaultStartLocation) {
+        setStartLocation(currentSelectedVehicle.defaultStartLocation);
+      } else {
+         setStartLocation(''); // Clear if no default
+      }
+    } else if (trip) {
+       // When editing, ensure state matches the trip data
+       setStartOdometer(trip.startOdometer);
+       setEndOdometer(trip.endOdometer);
+       setStartLocation(trip.startLocation);
+       setEndLocation(trip.endLocation);
+       setIsPartial(trip.status === 'partial');
+    }
+  }, [trip, currentSelectedVehicle]); // Depend on trip and the currently selected vehicle
+
+
+  // Calculate distance when odometer readings change
+  useEffect(() => {
+    setDistance(endOdometer - startOdometer);
+  }, [startOdometer, endOdometer]);
+
+  // Handle vehicle selection change - update start odometer and default location for NEW trips
+  useEffect(() => {
+      if (!trip && currentSelectedVehicle) { // Only for new trips
+          if (currentSelectedVehicle.currentOdometer > 0) {
+              setStartOdometer(currentSelectedVehicle.currentOdometer);
+              setEndOdometer(currentSelectedVehicle.currentOdometer);
+          } else {
+              setStartOdometer(0);
+              setEndOdometer(0);
+          }
+          if (currentSelectedVehicle.defaultStartLocation) {
+              setStartLocation(currentSelectedVehicle.defaultStartLocation);
+          } else {
+              setStartLocation('');
+          }
+      }
+  }, [trip, currentSelectedVehicle]);
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateForm()) {
-      onSubmit(formData);
-    }
-  };
 
-  const handleInputChange = (field: string, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+    // Basic validation for required fields even for partial trips
+    if (!selectedVehicleId || !date || !startTime || !startLocation || !driverName || purpose === undefined) {
+        alert('Bitte füllen Sie die erforderlichen Felder aus: Fahrzeug, Datum, Startzeit, Startort, Fahrer, Zweck.');
+        return;
     }
+
+    // Additional validation for complete trips
+    if (!isPartial) {
+        if (!endTime || !endLocation || endOdometer === null || endOdometer === undefined || isNaN(endOdometer)) {
+             alert('Bitte füllen Sie die Felder für das Ende der Fahrt aus oder markieren Sie die Fahrt als unvollständig.');
+             return;
+        }
+         if (endOdometer < startOdometer) {
+            alert('Der End-Kilometerstand kann nicht kleiner sein als der Start-Kilometerstand.');
+            return;
+         }
+    } else {
+        // If saving as partial, ensure end odometer is 0 or null (database default is 0)
+        // and end time/location are empty.
+        setEndTime('');
+        setEndLocation('');
+        setEndOdometer(0); // Ensure it's 0 for partial saves
+    }
+
+
+    onSubmit({
+      vehicleId: selectedVehicleId,
+      date,
+      startTime,
+      endTime: isPartial ? '' : endTime, // Save empty string if partial
+      startLocation,
+      endLocation: isPartial ? '' : endLocation, // Save empty string if partial
+      purpose,
+      startOdometer,
+      endOdometer: isPartial ? 0 : endOdometer, // Save 0 if partial
+      driverName,
+      notes,
+      status: isPartial ? 'partial' : 'complete', // Set status based on checkbox
+    });
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
-            Fahrzeug *
-          </label>
-          <select
-            id="vehicleId"
-            value={formData.vehicleId}
-            onChange={(e) => handleInputChange('vehicleId', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.vehicleId ? 'border-red-500' : ''
-            }`}
-            required
-          >
-            <option value="">Fahrzeug auswählen</option>
-            {vehicles.map((vehicle) => (
-              <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
-              </option>
-            ))}
-          </select>
-          {errors.vehicleId && <p className="mt-1 text-sm text-red-600">{errors.vehicleId}</p>}
-        </div>
+    <form onSubmit={handleSubmit} className="space-y-4 flex flex-col h-full">
+      {/* Scrollable content area */}
+      <div className="overflow-y-auto pr-2 flex-1">
+        <div className="space-y-4">
+          {/* Fahrzeug and Zweck side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="vehicleId" className="block text-sm font-medium text-gray-700">
+                Fahrzeug
+              </label>
+              <select
+                id="vehicleId"
+                value={selectedVehicleId}
+                onChange={(e) => setSelectedVehicleId(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="">Fahrzeug wählen</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.licensePlate} - {vehicle.make} {vehicle.model}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
+                Zweck
+              </label>
+              <select
+                id="purpose"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value as TripPurpose)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="business">Geschäftlich</option>
+                <option value="private">Privat</option>
+                <option value="commute">Arbeitsweg</option>
+              </select>
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-            Datum *
-          </label>
-          <input
-            type="date"
-            id="date"
-            value={formData.date}
-            onChange={(e) => handleInputChange('date', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.date ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.date && <p className="mt-1 text-sm text-red-600">{errors.date}</p>}
-        </div>
+          {/* Datum and Fahrer side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="date" className="block text-sm font-medium text-gray-700">
+                Datum
+              </label>
+              <input
+                type="date"
+                id="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
+                Fahrer
+              </label>
+              <select
+                id="driverName"
+                value={driverName}
+                onChange={(e) => setDriverName(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              >
+                <option value="">Fahrer wählen oder eingeben</option>
+                {uniqueDrivers.map((driver) => (
+                  <option key={driver} value={driver}>
+                    {driver}
+                  </option>
+                ))}
+                 {driverName && !uniqueDrivers.includes(driverName) && (
+                    <option value={driverName}>{driverName} (Neu)</option>
+                 )}
+              </select>
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
-            Startzeit *
-          </label>
-          <input
-            type="time"
-            id="startTime"
-            value={formData.startTime}
-            onChange={(e) => handleInputChange('startTime', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.startTime ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.startTime && <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>}
-        </div>
+          {/* Startzeit and Endzeit side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startTime" className="block text-sm font-medium text-gray-700">
+                Startzeit
+              </label>
+              <input
+                type="time"
+                id="startTime"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
+                Endzeit
+              </label>
+              <input
+                type="time"
+                id="endTime"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
+              />
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="endTime" className="block text-sm font-medium text-gray-700">
-            Endzeit *
-          </label>
-          <input
-            type="time"
-            id="endTime"
-            value={formData.endTime}
-            onChange={(e) => handleInputChange('endTime', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.endTime ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.endTime && <p className="mt-1 text-sm text-red-600">{errors.endTime}</p>}
-        </div>
+          {/* Startort and Zielort side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
+                Startort
+              </label>
+              <input
+                type="text"
+                id="startLocation"
+                value={startLocation}
+                onChange={(e) => setStartLocation(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
+                Zielort
+              </label>
+              <input
+                type="text"
+                id="endLocation"
+                value={endLocation}
+                onChange={(e) => setEndLocation(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
+              />
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="startLocation" className="block text-sm font-medium text-gray-700">
-            Startort *
-          </label>
-          <input
-            type="text"
-            id="startLocation"
-            value={formData.startLocation}
-            onChange={(e) => handleInputChange('startLocation', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.startLocation ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.startLocation && <p className="mt-1 text-sm text-red-600">{errors.startLocation}</p>}
-        </div>
+          {/* Kilometerstand Start, Ende, and Distanz side-by-side */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="startOdometer" className="block text-sm font-medium text-gray-700">
+                Kilometerstand Start
+              </label>
+              <input
+                type="number"
+                id="startOdometer"
+                value={startOdometer}
+                onChange={(e) => setStartOdometer(parseInt(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+                min="0"
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="endOdometer" className="block text-sm font-medium text-gray-700">
+                Kilometerstand Ende
+              </label>
+              <input
+                type="number"
+                id="endOdometer"
+                value={endOdometer}
+                onChange={(e) => setEndOdometer(parseInt(e.target.value))}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border disabled:bg-gray-100"
+                min={startOdometer}
+                required={!isPartial} // Required only if not partial
+                disabled={isPartial} // Disable if partial
+              />
+            </div>
+            <div>
+              <label htmlFor="distance" className="block text-sm font-medium text-gray-700">
+                Distanz (km)
+              </label>
+              <input
+                type="number"
+                id="distance"
+                value={distance}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 p-2 border"
+                readOnly
+                disabled={isPartial} // Disable distance display if partial
+              />
+            </div>
+          </div>
 
-        <div>
-          <label htmlFor="endLocation" className="block text-sm font-medium text-gray-700">
-            Zielort *
-          </label>
-          <input
-            type="text"
-            id="endLocation"
-            value={formData.endLocation}
-            onChange={(e) => handleInputChange('endLocation', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.endLocation ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.endLocation && <p className="mt-1 text-sm text-red-600">{errors.endLocation}</p>}
-        </div>
+          {/* Notizen */}
+          <div>
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+              Notizen
+            </label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
+              rows={3}
+            />
+          </div>
 
-        <div>
-          <label htmlFor="purpose" className="block text-sm font-medium text-gray-700">
-            Zweck *
-          </label>
-          <select
-            id="purpose"
-            value={formData.purpose}
-            onChange={(e) => handleInputChange('purpose', e.target.value as TripPurpose)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-            required
-          >
-            <option value="business">Geschäftlich</option>
-            <option value="private">Privat</option>
-            <option value="commute">Pendeln</option>
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="driverName" className="block text-sm font-medium text-gray-700">
-            Fahrer *
-          </label>
-          <input
-            type="text"
-            id="driverName"
-            value={formData.driverName}
-            onChange={(e) => handleInputChange('driverName', e.target.value)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.driverName ? 'border-red-500' : ''
-            }`}
-            required
-          />
-          {errors.driverName && <p className="mt-1 text-sm text-red-600">{errors.driverName}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="startOdometer" className="block text-sm font-medium text-gray-700">
-            Start-Kilometerstand *
-          </label>
-          <input
-            type="number"
-            id="startOdometer"
-            value={formData.startOdometer}
-            onChange={(e) => handleInputChange('startOdometer', parseInt(e.target.value) || 0)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.startOdometer ? 'border-red-500' : ''
-            }`}
-            min="0"
-            required
-          />
-          {errors.startOdometer && <p className="mt-1 text-sm text-red-600">{errors.startOdometer}</p>}
-        </div>
-
-        <div>
-          <label htmlFor="endOdometer" className="block text-sm font-medium text-gray-700">
-            End-Kilometerstand *
-          </label>
-          <input
-            type="number"
-            id="endOdometer"
-            value={formData.endOdometer}
-            onChange={(e) => handleInputChange('endOdometer', parseInt(e.target.value) || 0)}
-            className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border ${
-              errors.endOdometer ? 'border-red-500' : ''
-            }`}
-            min="0"
-            required
-          />
-          {errors.endOdometer && <p className="mt-1 text-sm text-red-600">{errors.endOdometer}</p>}
+          {/* Checkbox for Partial Trip */}
+          {!trip && ( // Only show for new trips
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isPartial"
+                checked={isPartial}
+                onChange={(e) => setIsPartial(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="isPartial" className="ml-2 block text-sm text-gray-900">
+                Fahrt nur starten (später vervollständigen)
+              </label>
+            </div>
+          )}
+           {trip && trip.status === 'partial' && ( // Show info for existing partial trips
+             <div className="p-3 bg-yellow-50 text-yellow-700 rounded-md text-sm">
+               Diese Fahrt ist unvollständig. Bitte füllen Sie die fehlenden Felder aus, um sie zu vervollständigen.
+             </div>
+           )}
         </div>
       </div>
 
-      <div>
-        <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-          Notizen
-        </label>
-        <textarea
-          id="notes"
-          value={formData.notes}
-          onChange={(e) => handleInputChange('notes', e.target.value)}
-          rows={3}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 border"
-          placeholder="Zusätzliche Informationen zur Fahrt..."
-        />
-      </div>
-
-      <div className="flex justify-end space-x-3 pt-4">
+      {/* Fixed button area */}
+      <div className="flex justify-end space-x-3 pt-4 bg-white">
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-800 transition-colors"
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           Abbrechen
         </button>
         <button
           type="submit"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white transition-colors"
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
-          {trip ? 'Aktualisieren' : 'Hinzufügen'}
+          {trip && trip.status === 'partial' ? 'Fahrt vervollständigen' : 'Speichern'}
         </button>
       </div>
     </form>

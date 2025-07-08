@@ -32,19 +32,14 @@ const Vehicles: React.FC = () => {
     }
   };
 
-  const handleAddVehicle = (vehicleData: Omit<Vehicle, 'id' | 'user_id'>) => {
+  const handleAddVehicle = (vehicleData: Omit<Vehicle, 'id'>) => {
     addVehicle(vehicleData);
     setShowVehicleForm(false);
   };
 
-  const handleUpdateVehicle = (vehicleData: Omit<Vehicle, 'id' | 'user_id'>) => {
+  const handleUpdateVehicle = (vehicleData: Omit<Vehicle, 'id'>) => {
     if (editingVehicle) {
-      const updatedVehicle: Vehicle = {
-        ...vehicleData,
-        id: editingVehicle.id,
-        user_id: editingVehicle.user_id,
-      };
-      updateVehicle(updatedVehicle);
+      updateVehicle({ ...vehicleData, id: editingVehicle.id });
       setEditingVehicle(null);
       setShowVehicleForm(false);
     }
