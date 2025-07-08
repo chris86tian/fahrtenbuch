@@ -1,156 +1,127 @@
-import React, { useState, useRef } from 'react';
-import { Trip, Vehicle } from '../types';
-import { parseCSV, validateImportedTrips, convertImportedTrips } from '../utils/importFromExcel';
-import { Download, AlertTriangle } from 'lucide-react';
-import { useAppContext } from '../context/AppContext'; // Import useAppContext
+import React, { useState } from 'react';
+import { Trip } from '../types';
+import { importTripsFromExcel } from '../utils/importFromExcel';
 
 interface ImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (trips: Trip[]) => void;
-  // vehicles prop is no longer strictly needed here, but keep it for context consistency
+}
+
+interface ConvertedTrip {
+  vehicleId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  startLocation: string;
+  endLocation: string;
+  purpose: 'business' | 'private' | 'commute';
+  startOdometer: number;
+  endOdometer: number;
+  driverName: string;
+  notes?: string;
+  status: 'complete' | 'partial';
 }
 
 const ImportDialog: React.FC<ImportDialogProps> = ({ isOpen, onClose, onImport }) => {
-  const { vehicles } = useAppContext(); // Get vehicles from context
-  const [errors, setErrors] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const targetVehicle = vehicles[0]; // Get the first vehicle
-
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    console.log("ImportDialog: File selected:", file.name);
-    setIsProcessing(true);
-    setErrors([]);
-
-    // Check if a vehicle exists before processing
-    if (!targetVehicle) {
-        console.error("ImportDialog: No target vehicle found.");
-        setErrors(['Kein Fahrzeug im System gefunden. Bitte legen Sie zuerst ein Fahrzeug an, um Fahrten importieren zu können.']);
-        setIsProcessing(false);
-        return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setError(null);
     }
-    console.log("ImportDialog: Target vehicle:", targetVehicle.licensePlate);
+  };
+
+  const handleImport = async () => {
+    if (!file) {
+      setError('Bitte wählen Sie eine Datei aus.');
+      return;
+    }
+
+    setIsImporting(true);
+    setError(null);
 
     try {
-      const content = await file.text();
-      console.log("ImportDialog: File content read.");
+      const convertedTrips = await importTripsFromExcel(file);
       
-      const importedTripsRaw = parseCSV(content);
-      console.log("ImportDialog: Parsed trips (raw):", importedTripsRaw);
+      // Convert ConvertedTrip to Trip format by adding required properties
+      const tripsWithIds: Trip[] = convertedTrips.map((trip: ConvertedTrip) => ({
+        ...trip,
+        id: crypto.randomUUID(), // Generate temporary ID
+        user_id: 'temp-user-id', // Will be set properly when saved
+      }));
       
-      // Validate the imported data
-      const validation = validateImportedTrips(importedTripsRaw, vehicles); 
-      console.log("ImportDialog: Validation result:", validation);
-      
-      if (!validation.valid) {
-        setErrors(validation.errors);
-        setIsProcessing(false); // Stop processing on validation errors
-        console.error("ImportDialog: Validation failed.", validation.errors);
-        return;
-      }
-      console.log("ImportDialog: Validation successful.");
-
-      // Convert to our Trip format, assigning to the first vehicle
-      const tripsToImport = convertImportedTrips(importedTripsRaw, vehicles); 
-      console.log("ImportDialog: Converted trips:", tripsToImport);
-
-      onImport(tripsToImport); // Call the function passed from Dashboard
-      console.log("ImportDialog: onImport called successfully.");
-      
-      onClose(); // Close dialog on successful import
-    } catch (error) {
-      console.error("ImportDialog: Error during import process:", error);
-      setErrors([`Fehler beim Verarbeiten der Datei: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}. Bitte überprüfen Sie das Dateiformat und die Daten.`]);
+      onImport(tripsWithIds);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Fehler beim Importieren der Datei.');
     } finally {
-      setIsProcessing(false);
-      console.log("ImportDialog: Processing finished.");
-      // Reset file input value so the same file can be selected again if needed
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''; 
-      }
+      setIsImporting(false);
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg p-6 max-w-2xl w-full shadow-xl">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Fahrten importieren</h2>
         
-        {targetVehicle && (
-          <div className="mb-4 p-3 bg-blue-50 rounded-md text-sm text-blue-700 flex items-start">
-            <AlertTriangle size={18} className="mr-2 mt-0.5 flex-shrink-0 text-blue-500" />
-            <div>
-              Alle importierten Fahrten werden automatisch dem Fahrzeug <strong>{targetVehicle.licensePlate} ({targetVehicle.make} {targetVehicle.model})</strong> zugeordnet. Das Kennzeichen in der CSV-Datei wird ignoriert.
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="file-upload" className="block text-sm font-medium text-gray-700 mb-2">
+              Excel-Datei auswählen
+            </label>
+            <input
+              id="file-upload"
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            />
           </div>
-        )}
-         {!targetVehicle && (
-          <div className="mb-4 p-3 bg-red-50 rounded-md text-sm text-red-700 flex items-start">
-            <AlertTriangle size={18} className="mr-2 mt-0.5 flex-shrink-0 text-red-500" />
-            <div>
-              <strong>Kein Fahrzeug gefunden!</strong> Bitte legen Sie zuerst ein Fahrzeug an, bevor Sie Fahrten importieren.
+
+          {error && (
+            <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
+              {error}
             </div>
-          </div>
-        )}
+          )}
 
-        <div className="mb-6">
-          <p className="text-gray-600 mb-2">
-            Laden Sie eine CSV-Datei hoch. Die Datei sollte folgende Spalten enthalten (Reihenfolge wichtig):
-          </p>
-          <code className="text-xs bg-gray-100 p-2 rounded block overflow-x-auto">
-            Datum (DD.MM.YYYY),Uhrzeit (von),Uhrzeit (bis),Startort,Zielort,Zweck,Kilometerstand (Start),Kilometerstand (Ende),Gefahrene Kilometer,Fahrer,Fahrzeugkennzeichen,Fahrzeug,Notizen
-          </code>
-          <p className="text-xs text-gray-500 mt-1">Die Spalten "Gefahrene Kilometer" und "Fahrzeug" werden ignoriert, sind aber für die korrekte Spaltenzuordnung erforderlich.</p>
-        </div>
-
-        <div className="mb-6">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleFileSelect}
-            disabled={isProcessing || !targetVehicle} // Disable if processing or no vehicle exists
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-           {isProcessing && <p className="text-sm text-blue-600 mt-2">Datei wird verarbeitet...</p>}
-        </div>
-
-        {errors.length > 0 && (
-          <div className="mb-6 p-4 bg-red-50 rounded-md">
-            <h3 className="text-sm font-medium text-red-800 mb-2">
-              Fehler beim Import:
-            </h3>
-            <ul className="text-sm text-red-700 list-disc list-inside space-y-1">
-              {errors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
+          <div className="text-sm text-gray-600">
+            <p className="mb-2">Die Excel-Datei sollte folgende Spalten enthalten:</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              <li>Datum</li>
+              <li>Startzeit</li>
+              <li>Endzeit</li>
+              <li>Von (Startort)</li>
+              <li>Nach (Zielort)</li>
+              <li>Zweck (geschäftlich/privat/pendeln)</li>
+              <li>KM Start</li>
+              <li>KM Ende</li>
+              <li>Fahrer</li>
             </ul>
           </div>
-        )}
+        </div>
 
-        <div className="flex justify-end space-x-3">
+        <div className="flex justify-end space-x-3 mt-6">
           <button
             onClick={onClose}
-            disabled={isProcessing}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            disabled={isImporting}
+            className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-800 transition-colors disabled:opacity-50"
           >
             Abbrechen
           </button>
-          <a
-            href="/template.csv"
-            download="fahrtenbuch_vorlage.csv"
-            className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+          <button
+            onClick={handleImport}
+            disabled={!file || isImporting}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white transition-colors disabled:opacity-50"
           >
-            <Download size={18} className="mr-2" />
-            Vorlage herunterladen
-          </a>
+            {isImporting ? 'Importiere...' : 'Importieren'}
+          </button>
         </div>
       </div>
     </div>

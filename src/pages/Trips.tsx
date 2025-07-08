@@ -4,7 +4,6 @@ import { useAppContext } from '../context/AppContext';
 import TripList from '../components/TripList';
 import TripForm from '../components/TripForm';
 import ConfirmDialog from '../components/ConfirmDialog';
-// import SplitTripDialog from '../components/SplitTripDialog'; // Remove import for the split dialog
 import { PlusCircle } from 'lucide-react';
 
 const Trips: React.FC = () => {
@@ -16,11 +15,6 @@ const Trips: React.FC = () => {
   const [tripToDelete, setTripToDelete] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [filterText, setFilterText] = useState<string>('');
-
-  // Remove state related to split dialog
-  // const [showSplitDialog, setShowSplitDialog] = useState(false);
-  // const [tripToSplit, setTripToSplit] = useState<Trip | null>(null);
-
 
   // Get available years from trips
   const availableYears = useMemo(() => {
@@ -66,7 +60,6 @@ const Trips: React.FC = () => {
     return currentTrips;
   }, [trips, activeVehicle, selectedYear, filterText]);
 
-
   const handleEditTrip = (trip: Trip) => {
     setEditingTrip(trip);
     setShowTripForm(true);
@@ -86,13 +79,24 @@ const Trips: React.FC = () => {
   };
 
   const handleAddTrip = async (tripData: Omit<Trip, 'id' | 'user_id'>) => {
-    await addTrip(tripData);
+    // Add default status if not provided
+    const tripWithStatus = {
+      ...tripData,
+      status: tripData.status || 'complete' as const,
+    };
+    await addTrip(tripWithStatus);
     setShowTripForm(false);
   };
 
   const handleUpdateTrip = async (tripData: Omit<Trip, 'id' | 'user_id'>) => {
     if (editingTrip) {
-      await updateTrip({ ...tripData, id: editingTrip.id, user_id: editingTrip.user_id });
+      const tripWithStatus = {
+        ...tripData,
+        id: editingTrip.id,
+        user_id: editingTrip.user_id,
+        status: tripData.status || 'complete' as const,
+      };
+      await updateTrip(tripWithStatus);
       setEditingTrip(null);
       setShowTripForm(false);
     }
@@ -113,17 +117,13 @@ const Trips: React.FC = () => {
       endOdometer: trip.endOdometer,
       driverName: trip.driverName,
       notes: trip.notes ? `(Kopie) ${trip.notes}` : '(Kopie)', // Add a note indicating it's a copy
+      status: trip.status || 'complete',
     };
 
     // Add the duplicated trip
     await addTrip(duplicatedTripData);
     console.log("Trip duplicated successfully.");
-    // No need to delete the original trip
   };
-
-  // Remove handleSplitTrip function
-  // const handleSplitTrip = async (...) => { ... };
-
 
   // Debug output to check trips and years
   console.log("All trips:", trips.length);
@@ -214,20 +214,6 @@ const Trips: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Remove Split Trip Dialog rendering */}
-      {/* {showSplitDialog && tripToSplit && (
-         <SplitTripDialog
-            isOpen={showSplitDialog}
-            onClose={() => {
-               setShowSplitDialog(false);
-               setTripToSplit(null);
-            }}
-            trip={tripToSplit}
-            onSplit={handleSplitTrip}
-         />
-      )} */}
-
 
       {/* Delete Confirmation */}
       <ConfirmDialog

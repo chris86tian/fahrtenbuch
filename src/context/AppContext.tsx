@@ -1,475 +1,319 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Trip, Vehicle, ReminderSettings, DashboardStats } from '../types';
-import { supabase } from '../utils/supabaseClient';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { Vehicle, Trip, ReminderSettings, TripStatus } from '../types';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
 
-interface AppContextType {
+interface AppState {
   vehicles: Vehicle[];
   trips: Trip[];
-  reminderSettings: ReminderSettings;
-  stats: DashboardStats;
   activeVehicle: Vehicle | null;
+  reminderSettings: ReminderSettings;
+  loading: boolean;
+  error: string | null;
+}
+
+type AppAction =
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_VEHICLES'; payload: Vehicle[] }
+  | { type: 'ADD_VEHICLE'; payload: Vehicle }
+  | { type: 'UPDATE_VEHICLE'; payload: Vehicle }
+  | { type: 'DELETE_VEHICLE'; payload: string }
+  | { type: 'SET_TRIPS'; payload: Trip[] }
+  | { type: 'ADD_TRIP'; payload: Trip }
+  | { type: 'UPDATE_TRIP'; payload: Trip }
+  | { type: 'DELETE_TRIP'; payload: string }
+  | { type: 'SET_ACTIVE_VEHICLE'; payload: Vehicle | null }
+  | { type: 'SET_REMINDER_SETTINGS'; payload: ReminderSettings };
+
+const initialState: AppState = {
+  vehicles: [],
+  trips: [],
+  activeVehicle: null,
+  reminderSettings: {
+    enabled: false,
+    day: 'friday',
+    time: '17:00',
+  },
+  loading: false,
+  error: null,
+};
+
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
+    case 'SET_VEHICLES':
+      return { ...state, vehicles: action.payload };
+    case 'ADD_VEHICLE':
+      return { ...state, vehicles: [...state.vehicles, action.payload] };
+    case 'UPDATE_VEHICLE':
+      return {
+        ...state,
+        vehicles: state.vehicles.map(v => v.id === action.payload.id ? action.payload : v),
+        activeVehicle: state.activeVehicle?.id === action.payload.id ? action.payload : state.activeVehicle,
+      };
+    case 'DELETE_VEHICLE':
+      return {
+        ...state,
+        vehicles: state.vehicles.filter(v => v.id !== action.payload),
+        trips: state.trips.filter(t => t.vehicleId !== action.payload),
+        activeVehicle: state.activeVehicle?.id === action.payload ? null : state.activeVehicle,
+      };
+    case 'SET_TRIPS':
+      return { ...state, trips: action.payload };
+    case 'ADD_TRIP':
+      return { ...state, trips: [...state.trips, action.payload] };
+    case 'UPDATE_TRIP':
+      return {
+        ...state,
+        trips: state.trips.map(t => t.id === action.payload.id ? action.payload : t),
+      };
+    case 'DELETE_TRIP':
+      return {
+        ...state,
+        trips: state.trips.filter(t => t.id !== action.payload),
+      };
+    case 'SET_ACTIVE_VEHICLE':
+      return { ...state, activeVehicle: action.payload };
+    case 'SET_REMINDER_SETTINGS':
+      return { ...state, reminderSettings: action.payload };
+    default:
+      return state;
+  }
+}
+
+interface AppContextType extends AppState {
   addVehicle: (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => Promise<void>;
   updateVehicle: (vehicle: Vehicle) => Promise<void>;
   deleteVehicle: (id: string) => Promise<void>;
-  setActiveVehicle: (vehicle: Vehicle | null) => void;
-  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<Trip | null>;
-  addTripsBatch: (trips: Omit<Trip, 'id' | 'user_id'>[]) => Promise<{ data: Trip[] | null; error: any }>;
+  addTrip: (trip: Omit<Trip, 'id' | 'user_id'>) => Promise<void>;
   updateTrip: (trip: Trip) => Promise<void>;
   deleteTrip: (id: string) => Promise<void>;
-  deleteAllTrips: () => Promise<void>;
-  updateReminderSettings: (settings: ReminderSettings) => void;
-  loading: boolean;
+  setActiveVehicle: (vehicle: Vehicle | null) => void;
+  updateReminderSettings: (settings: ReminderSettings) => Promise<void>;
+  refreshData: () => Promise<void>;
 }
-
-const defaultReminderSettings: ReminderSettings = {
-  enabled: true,
-  day: 'friday',
-  time: '18:00',
-};
-
-const calculateStats = (trips: Trip[]): DashboardStats => {
-  const stats: DashboardStats = {
-    totalTrips: 0, // Count only complete trips for stats
-    businessTrips: 0,
-    privateTrips: 0,
-    commuteTrips: 0,
-    totalDistance: 0,
-    businessDistance: 0,
-    privateDistance: 0,
-    commuteDistance: 0,
-  };
-
-  // Only include complete trips in stats calculation
-  const completeTrips = trips.filter(trip => trip.status === 'complete');
-
-  stats.totalTrips = completeTrips.length;
-
-  completeTrips.forEach(trip => {
-    const distance = trip.endOdometer - trip.startOdometer;
-    stats.totalDistance += distance;
-
-    switch (trip.purpose) {
-      case 'business':
-        stats.businessTrips++;
-        stats.businessDistance += distance;
-        break;
-      case 'private':
-        stats.privateTrips++;
-        stats.privateDistance += distance;
-        break;
-      case 'commute':
-        stats.commuteTrips++;
-        stats.commuteDistance += distance;
-        break;
-    }
-  });
-
-  return stats;
-};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(defaultReminderSettings);
-  const [activeVehicle, setActiveVehicle] = useState<Vehicle | null>(null);
-  const [stats, setStats] = useState<DashboardStats>(() => calculateStats(trips));
-  const [loading, setLoading] = useState(true);
+  const [state, dispatch] = useReducer(appReducer, initialState);
+  const { user } = useAuth();
 
-  // Fahrzeuge aus Supabase laden
+  // Load data when user changes
   useEffect(() => {
-    const loadVehicles = async () => {
-      if (!isAuthenticated || !user) {
-        setVehicles([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        console.log("AppContext: Loading vehicles for user:", user.id);
-        const { data, error } = await supabase
-          .from('vehicles')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (error) {
-          console.error('AppContext: Fehler beim Laden der Fahrzeuge:', error);
-          return;
-        }
-
-        console.log("AppContext: Vehicles loaded:", data);
-        setVehicles(data || []);
-      } catch (error) {
-        console.error('AppContext: Fehler beim Laden der Fahrzeuge:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadVehicles();
-  }, [isAuthenticated, user]);
-
-  // Fahrten aus Supabase laden
-  useEffect(() => {
-    const loadTrips = async () => {
-      if (!isAuthenticated || !user) {
-        setTrips([]);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        console.log("AppContext: Loading all trips for user:", user.id);
-
-        // Fetch all trips including the new 'status' column
-        const { data, error } = await supabase
-          .from('trips')
-          .select('*')
-          .eq('user_id', user.id);
-
-        if (error) {
-          console.error('AppContext: Fehler beim Laden der Fahrten:', error);
-          return;
-        }
-
-        console.log(`AppContext: Total trips loaded count: ${data ? data.length : 0}`);
-
-        setTrips(data || []);
-      } catch (error) {
-        console.error('AppContext: Fehler beim Laden der Fahrten:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadTrips();
-  }, [isAuthenticated, user]);
-
-  // Statistiken aktualisieren, wenn sich die Fahrten ändern
-  useEffect(() => {
-    setStats(calculateStats(trips));
-  }, [trips]);
-
-  // Aktives Fahrzeug setzen, wenn Fahrzeuge geladen werden
-  useEffect(() => {
-    if (vehicles.length > 0 && !activeVehicle) {
-      setActiveVehicle(vehicles[0]);
-    } else if (vehicles.length === 0) {
-      setActiveVehicle(null); // Clear active vehicle if no vehicles exist
+    if (user) {
+      refreshData();
+    } else {
+      // Clear data when user logs out
+      dispatch({ type: 'SET_VEHICLES', payload: [] });
+      dispatch({ type: 'SET_TRIPS', payload: [] });
+      dispatch({ type: 'SET_ACTIVE_VEHICLE', payload: null });
     }
-  }, [vehicles, activeVehicle]);
+  }, [user]);
 
-  // Erinnerungseinstellungen aus localStorage laden (bleibt vorerst in localStorage)
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('reminderSettings');
-    if (savedSettings) {
-      setReminderSettings(JSON.parse(savedSettings));
+  const refreshData = async () => {
+    if (!user) return;
+
+    dispatch({ type: 'SET_LOADING', payload: true });
+    dispatch({ type: 'SET_ERROR', payload: null });
+
+    try {
+      // Load vehicles
+      const { data: vehiclesData, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (vehiclesError) throw vehiclesError;
+
+      dispatch({ type: 'SET_VEHICLES', payload: vehiclesData || [] });
+
+      // Load trips
+      const { data: tripsData, error: tripsError } = await supabase
+        .from('trips')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('date', { ascending: false });
+
+      if (tripsError) throw tripsError;
+
+      dispatch({ type: 'SET_TRIPS', payload: tripsData || [] });
+
+      // Load reminder settings
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('user_settings')
+        .select('reminder_settings')
+        .eq('user_id', user.id)
+        .single();
+
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        throw settingsError;
+      }
+
+      if (settingsData?.reminder_settings) {
+        dispatch({ type: 'SET_REMINDER_SETTINGS', payload: settingsData.reminder_settings });
+      }
+
+    } catch (error) {
+      console.error('Error loading data:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Laden der Daten' });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  }, []);
+  };
 
-  // Erinnerungseinstellungen in localStorage speichern
-  useEffect(() => {
-    localStorage.setItem('reminderSettings', JSON.stringify(reminderSettings));
-  }, [reminderSettings]);
+  const addVehicle = async (vehicleData: Omit<Vehicle, 'id' | 'user_id'>) => {
+    if (!user) return;
 
-  const addVehicle = async (vehicle: Omit<Vehicle, 'id' | 'user_id'>) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Adding vehicle:", vehicle);
     try {
       const { data, error } = await supabase
         .from('vehicles')
-        .insert([{ ...vehicle, user_id: user.id }])
-        .select();
+        .insert([{ ...vehicleData, user_id: user.id }])
+        .select()
+        .single();
 
-      if (error) {
-        console.error('AppContext: Fehler beim Hinzufügen des Fahrzeugs:', error);
-        return;
-      }
+      if (error) throw error;
 
-      if (data && data.length > 0) {
-        const newVehicle = data[0] as Vehicle;
-        console.log("AppContext: Vehicle added successfully:", newVehicle);
-        setVehicles(prev => [...prev, newVehicle]);
-
-        if (!activeVehicle) {
-          setActiveVehicle(newVehicle);
-        }
-      }
+      dispatch({ type: 'ADD_VEHICLE', payload: data });
     } catch (error) {
-      console.error('AppContext: Fehler beim Hinzufügen des Fahrzeugs:', error);
+      console.error('Error adding vehicle:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Hinzufügen des Fahrzeugs' });
     }
   };
 
   const updateVehicle = async (vehicle: Vehicle) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Updating vehicle:", vehicle);
     try {
       const { error } = await supabase
         .from('vehicles')
         .update(vehicle)
-        .eq('id', vehicle.id)
-        .eq('user_id', user.id);
+        .eq('id', vehicle.id);
 
-      if (error) {
-        console.error('AppContext: Fehler beim Aktualisieren des Fahrzeugs:', error);
-        return;
-      }
-      console.log("AppContext: Vehicle updated successfully.");
-      setVehicles(prev => prev.map(v => (v.id === vehicle.id ? vehicle : v)));
+      if (error) throw error;
 
-      if (activeVehicle?.id === vehicle.id) {
-        setActiveVehicle(vehicle);
-      }
+      dispatch({ type: 'UPDATE_VEHICLE', payload: vehicle });
     } catch (error) {
-      console.error('AppContext: Fehler beim Aktualisieren des Fahrzeugs:', error);
+      console.error('Error updating vehicle:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Aktualisieren des Fahrzeugs' });
     }
   };
 
   const deleteVehicle = async (id: string) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Deleting vehicle:", id);
     try {
       const { error } = await supabase
         .from('vehicles')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
-      if (error) {
-        console.error('AppContext: Fehler beim Löschen des Fahrzeugs:', error);
-        return;
-      }
-      console.log("AppContext: Vehicle deleted successfully.");
-      setVehicles(prev => prev.filter(v => v.id !== id));
+      if (error) throw error;
 
-      // If the deleted vehicle was the active one, set the first available vehicle as active
-      if (activeVehicle?.id === id) {
-        setActiveVehicle(vehicles.length > 1 ? vehicles.find(v => v.id !== id) || null : null);
-      }
-
-      // Fahrten werden automatisch durch die Datenbank-Constraints gelöscht (ON DELETE CASCADE)
-      // Wir müssen aber auch den lokalen Zustand aktualisieren
-      setTrips(prev => prev.filter(t => t.vehicleId !== id));
+      dispatch({ type: 'DELETE_VEHICLE', payload: id });
     } catch (error) {
-      console.error('AppContext: Fehler beim Löschen des Fahrzeugs:', error);
+      console.error('Error deleting vehicle:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Löschen des Fahrzeugs' });
     }
   };
 
-  const addTrip = async (trip: Omit<Trip, 'id' | 'user_id'>): Promise<Trip | null> => {
-    if (!isAuthenticated || !user) {
-      console.warn("AppContext: addTrip called without authenticated user.");
-      return null;
-    }
-    console.log("AppContext: Attempting to add single trip:", trip);
-    try {
-      const { data, error } = await supabase
-        .from('trips')
-        .insert([{ ...trip, user_id: user.id }])
-        .select();
-
-      if (error) {
-        console.error('AppContext: Fehler beim Hinzufügen der Fahrt:', error);
-        return null;
-      }
-
-      if (data && data.length > 0) {
-        const newTrip = data[0] as Trip;
-        console.log("AppContext: Single trip added successfully:", newTrip);
-        // Update local state immediately on success
-        setTrips(prev => [...prev, newTrip]);
-
-        // Aktualisiere den aktuellen Kilometerstand des Fahrzeugs NUR wenn die Fahrt vollständig ist
-        if (newTrip.status === 'complete' && newTrip.endOdometer > 0) {
-          const vehicle = vehicles.find(v => v.id === newTrip.vehicleId);
-          if (vehicle && newTrip.endOdometer > vehicle.currentOdometer) {
-            updateVehicle({
-              ...vehicle,
-              currentOdometer: newTrip.endOdometer
-            });
-          }
-        }
-        return newTrip;
-      } else {
-         console.warn("AppContext: Add single trip returned no data or error.");
-         return null;
-      }
-    } catch (error) {
-      console.error('AppContext: Fehler beim Hinzufügen der Fahrt (catch block):', error);
-      return null;
-    }
-  };
-
-  const addTripsBatch = async (trips: Omit<Trip, 'id' | 'user_id'>[]): Promise<{ data: Trip[] | null; error: any }> => {
-    if (!isAuthenticated || !user) {
-      console.warn("AppContext: addTripsBatch called without authenticated user.");
-      return { data: null, error: new Error("User not authenticated") };
-    }
-    if (trips.length === 0) {
-        return { data: [], error: null };
-    }
-
-    console.log(`AppContext: Attempting to add batch of ${trips.length} trips.`);
-    // Ensure status is 'complete' for imported trips as per validation logic
-    const tripsWithUserIdAndStatus = trips.map(trip => ({ ...trip, user_id: user.id, status: 'complete' as TripStatus }));
-
+  const addTrip = async (tripData: Omit<Trip, 'id' | 'user_id'>) => {
+    if (!user) return;
 
     try {
+      const tripWithDefaults = {
+        ...tripData,
+        user_id: user.id,
+        status: (tripData.status || 'complete') as TripStatus,
+      };
+
       const { data, error } = await supabase
         .from('trips')
-        .insert(tripsWithUserIdAndStatus)
-        .select();
+        .insert([tripWithDefaults])
+        .select()
+        .single();
 
-      if (error) {
-        console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch):', error);
-        return { data: null, error };
-      }
+      if (error) throw error;
 
-      if (data && data.length > 0) {
-        console.log(`AppContext: Batch of ${data.length} trips added successfully.`);
-        // Update local state with the newly added trips
-        setTrips(prev => [...prev, ...(data as Trip[])]);
-
-        // Note: Updating vehicle odometer for batches is complex.
-        // A full data reload after import is recommended to ensure consistency.
-        // For now, we won't update odometer here for batches.
-
-        return { data: data as Trip[], error: null };
-      } else {
-         console.warn("AppContext: Add trips batch returned no data or error.");
-         return { data: null, error: new Error("No data returned from batch insert") };
-      }
+      dispatch({ type: 'ADD_TRIP', payload: data });
     } catch (error) {
-      console.error('AppContext: Fehler beim Hinzufügen der Fahrten (Batch - catch block):', error);
-      return { data: null, error };
+      console.error('Error adding trip:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Hinzufügen der Fahrt' });
     }
   };
-
 
   const updateTrip = async (trip: Trip) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Updating trip:", trip);
     try {
       const { error } = await supabase
         .from('trips')
         .update(trip)
-        .eq('id', trip.id)
-        .eq('user_id', user.id);
+        .eq('id', trip.id);
 
-      if (error) {
-        console.error('AppContext: Fehler beim Aktualisieren der Fahrt:', error);
-        return;
-      }
-      console.log("AppContext: Trip updated successfully.");
-      setTrips(prev => prev.map(t => (t.id === trip.id ? trip : t)));
+      if (error) throw error;
 
-      // Aktualisiere den Kilometerstand des Fahrzeugs NUR wenn die Fahrt vollständig ist
-      // und dies die neueste Fahrt für das Fahrzeug ist.
-      if (trip.status === 'complete' && trip.endOdometer > 0) {
-         // Find the latest complete trip for this vehicle after the update
-         const vehicleTrips = trips
-            .filter(t => t.vehicleId === trip.vehicleId && t.status === 'complete')
-            .sort((a, b) => {
-                const dateA = new Date(`${a.date}T${a.endTime}`).getTime(); // Sort by end time for latest
-                const dateB = new Date(`${b.date}T${b.endTime}`).getTime();
-                return dateB - dateA; // Descending order
-            });
-
-         // Check if the updated trip is the latest complete trip
-         if (vehicleTrips.length > 0 && vehicleTrips[0].id === trip.id) {
-            const vehicle = vehicles.find(v => v.id === trip.vehicleId);
-            if (vehicle && trip.endOdometer > vehicle.currentOdometer) {
-              updateVehicle({
-                ...vehicle,
-                currentOdometer: trip.endOdometer
-              });
-            }
-         }
-      }
+      dispatch({ type: 'UPDATE_TRIP', payload: trip });
     } catch (error) {
-      console.error('AppContext: Fehler beim Aktualisieren der Fahrt:', error);
+      console.error('Error updating trip:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Aktualisieren der Fahrt' });
     }
   };
 
   const deleteTrip = async (id: string) => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Deleting trip:", id);
     try {
       const { error } = await supabase
         .from('trips')
         .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
-      if (error) {
-        console.error('AppContext: Fehler beim Löschen der Fahrt:', error);
-        return;
-      }
-      console.log("AppContext: Trip deleted successfully.");
-      setTrips(prev => prev.filter(t => t.id !== id));
+      if (error) throw error;
 
-      // Note: Deleting a trip might affect the latest odometer reading of a vehicle.
-      // A full data reload or recalculation of the latest odometer for the affected vehicle
-      // might be necessary after deletion for perfect accuracy.
-      // For simplicity now, we won't trigger a vehicle odometer update on trip deletion.
-      // The next trip addition/update for that vehicle will correct it.
-
+      dispatch({ type: 'DELETE_TRIP', payload: id });
     } catch (error) {
-      console.error('AppContext: Fehler beim Löschen der Fahrt:', error);
+      console.error('Error deleting trip:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Löschen der Fahrt' });
     }
   };
 
-  const deleteAllTrips = async () => {
-    if (!isAuthenticated || !user) return;
-    console.log("AppContext: Deleting all trips for user:", user.id);
+  const setActiveVehicle = (vehicle: Vehicle | null) => {
+    dispatch({ type: 'SET_ACTIVE_VEHICLE', payload: vehicle });
+  };
+
+  const updateReminderSettings = async (settings: ReminderSettings) => {
+    if (!user) return;
+
     try {
       const { error } = await supabase
-        .from('trips')
-        .delete()
-        .eq('user_id', user.id);
+        .from('user_settings')
+        .upsert([{
+          user_id: user.id,
+          reminder_settings: settings,
+        }]);
 
-      if (error) {
-        console.error('AppContext: Fehler beim Löschen aller Fahrten:', error);
-      } else {
-        console.log("AppContext: All trips deleted successfully.");
-        setTrips([]); // Clear local state
-        // Reset vehicle current odometers to initial odometer after deleting all trips
-        setVehicles(prev => prev.map(v => ({ ...v, currentOdometer: v.initialOdometer })));
-      }
+      if (error) throw error;
+
+      dispatch({ type: 'SET_REMINDER_SETTINGS', payload: settings });
     } catch (error) {
-      console.error('AppContext: Fehler beim Löschen aller Fahrten (catch block):', error);
+      console.error('Error updating reminder settings:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Fehler beim Aktualisieren der Erinnerungseinstellungen' });
     }
   };
 
-
-  const updateReminderSettings = (settings: ReminderSettings) => {
-    setReminderSettings(settings);
+  const contextValue: AppContextType = {
+    ...state,
+    addVehicle,
+    updateVehicle,
+    deleteVehicle,
+    addTrip,
+    updateTrip,
+    deleteTrip,
+    setActiveVehicle,
+    updateReminderSettings,
+    refreshData,
   };
 
   return (
-    <AppContext.Provider
-      value={{
-        vehicles,
-        trips,
-        reminderSettings,
-        stats,
-        activeVehicle,
-        addVehicle,
-        updateVehicle,
-        deleteVehicle,
-        setActiveVehicle,
-        addTrip,
-        addTripsBatch,
-        updateTrip,
-        deleteTrip,
-        deleteAllTrips,
-        updateReminderSettings,
-        loading
-      }}
-    >
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
